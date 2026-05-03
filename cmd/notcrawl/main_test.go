@@ -74,7 +74,7 @@ func TestTUIJSONListsArchiveRowsWithoutMutation(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
 		t.Fatalf("invalid json: %v\n%s", err, stdout.String())
 	}
-	if len(rows) == 0 || rows[0]["title"] != "Launch Plan" || rows[0]["source"] != "notion" || rows[0]["kind"] != "page" || rows[0]["container"] != "Roadmap" || !strings.Contains(fmt.Sprint(rows[0]["text"]), "sync launch checklist") {
+	if len(rows) == 0 || rows[0]["title"] != "Launch Plan" || rows[0]["source"] != "notion" || rows[0]["kind"] != "page" || rows[0]["container"] != "Roadmap" || !strings.Contains(fmt.Sprint(rows[0]["text"]), "sync launch checklist") || !strings.Contains(fmt.Sprint(rows[0]["detail"]), "sync launch checklist") {
 		t.Fatalf("unexpected rows: %#v", rows)
 	}
 	after, err := os.ReadFile(dbPath)
@@ -103,6 +103,9 @@ func TestCollectionTUIRowsResolveParentCollectionNames(t *testing.T) {
 	}
 	if rows[0].Scope != "Workspace" {
 		t.Fatalf("scope = %q", rows[0].Scope)
+	}
+	if !strings.Contains(rows[0].Detail, "Parent: Parent Database") {
+		t.Fatalf("detail = %q", rows[0].Detail)
 	}
 }
 

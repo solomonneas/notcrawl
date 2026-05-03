@@ -732,6 +732,7 @@ func pageTUIRows(pages []store.Page, limit int, pageTitles map[string]string, co
 		}
 		space := firstNonEmpty(spaceNames[page.SpaceID], page.SpaceID)
 		parent := firstNonEmpty(notionParentLabel(page.ParentTable, page.ParentID, pageTitles, collectionNames), notionWorkspaceParent(space))
+		preview := previews[page.ID]
 		items = append(items, tui.Row{
 			Source:    "notion",
 			Kind:      "page",
@@ -740,7 +741,8 @@ func pageTUIRows(pages []store.Page, limit int, pageTitles map[string]string, co
 			Scope:     space,
 			Container: firstNonEmpty(collectionNames[page.CollectionID], page.CollectionID),
 			Title:     title,
-			Text:      previews[page.ID],
+			Text:      preview,
+			Detail:    preview,
 			URL:       page.URL,
 			CreatedAt: formatMillis(page.CreatedTime),
 			UpdatedAt: formatMillis(page.LastEditedTime),
@@ -769,6 +771,7 @@ func collectionTUIRows(collections []store.Collection, limit int, pageTitles map
 		}
 		space := firstNonEmpty(spaceNames[collection.SpaceID], collection.SpaceID)
 		parent := firstNonEmpty(notionParentLabel(collection.ParentTable, collection.ParentID, pageTitles, collectionNames), notionWorkspaceParent(space))
+		preview := collectionPreview(collection, space, parent)
 		items = append(items, tui.Row{
 			Source:    "notion",
 			Kind:      "database",
@@ -776,7 +779,8 @@ func collectionTUIRows(collections []store.Collection, limit int, pageTitles map
 			ParentID:  parent,
 			Scope:     space,
 			Title:     title,
-			Text:      collectionPreview(collection, space, parent),
+			Text:      preview,
+			Detail:    preview,
 			UpdatedAt: formatMillis(collection.SyncedAt),
 			Tags:      []string{collection.Source},
 			Fields: map[string]string{
