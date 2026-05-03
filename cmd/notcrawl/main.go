@@ -658,11 +658,15 @@ func runTUI(ctx context.Context, stdout io.Writer, cfg config.Config, args []str
 	if err != nil {
 		return err
 	}
+	refreshRows := func(ctx context.Context) ([]tui.Row, error) {
+		return tuiRows(ctx, cfg, *kind, *limit)
+	}
 	return tui.Browse(ctx, tui.BrowseOptions{
 		AppName:        "notcrawl",
 		Title:          "notcrawl archive",
 		EmptyMessage:   "notcrawl has no local pages or databases yet",
 		Rows:           rows,
+		Refresh:        refreshRows,
 		JSON:           *jsonOut,
 		Layout:         tui.LayoutDocument,
 		SourceKind:     archiveSourceKind(cfg),
