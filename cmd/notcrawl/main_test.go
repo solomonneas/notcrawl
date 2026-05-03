@@ -142,6 +142,26 @@ func TestTUIRowsHideRawNotionParentIDs(t *testing.T) {
 	}
 }
 
+func TestTUIRowsHideNoisyNotionBlockParentLabels(t *testing.T) {
+	rows := pageTUIRows([]store.Page{{
+		ID:          "page1",
+		SpaceID:     "space1",
+		ParentID:    "block1",
+		ParentTable: "block",
+		Title:       "Child",
+		Alive:       true,
+		Source:      "test",
+	}}, 10, map[string]string{
+		"block1": "ce 2fd71240-10a3-80a0-a65a-007aec07c0d9 00b8cbcf-c520-4790-999a-9c2940263721 Pods",
+	}, nil, map[string]string{"space1": "Comet.com"}, nil)
+	if len(rows) != 1 {
+		t.Fatalf("rows = %#v", rows)
+	}
+	if rows[0].ParentID != "Workspace: Comet.com" {
+		t.Fatalf("noisy parent label = %q", rows[0].ParentID)
+	}
+}
+
 func TestHelpMentionsTUI(t *testing.T) {
 	var stdout bytes.Buffer
 	if err := run(context.Background(), []string{"--help"}, &stdout, &bytes.Buffer{}); err != nil {

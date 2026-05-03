@@ -737,7 +737,7 @@ func pageTUIRows(pages []store.Page, limit int, pageTitles map[string]string, co
 			title = page.ID
 		}
 		space := firstNonEmpty(spaceNames[page.SpaceID], page.SpaceID)
-		parent := firstNonEmpty(notionParentLabel(page.ParentTable, page.ParentID, pageTitles, collectionNames, spaceNames), notionWorkspaceParent(space))
+		parent := cleanNotionParentLabel(firstNonEmpty(notionParentLabel(page.ParentTable, page.ParentID, pageTitles, collectionNames, spaceNames), notionWorkspaceParent(space)), space)
 		preview := previews[page.ID]
 		items = append(items, tui.Row{
 			Source:    "notion",
@@ -776,7 +776,7 @@ func collectionTUIRows(collections []store.Collection, limit int, pageTitles map
 			title = collection.ID
 		}
 		space := firstNonEmpty(spaceNames[collection.SpaceID], collection.SpaceID)
-		parent := firstNonEmpty(notionParentLabel(collection.ParentTable, collection.ParentID, pageTitles, collectionNames, spaceNames), notionWorkspaceParent(space))
+		parent := cleanNotionParentLabel(firstNonEmpty(notionParentLabel(collection.ParentTable, collection.ParentID, pageTitles, collectionNames, spaceNames), notionWorkspaceParent(space)), space)
 		preview := collectionPreview(collection, space, parent)
 		items = append(items, tui.Row{
 			Source:    "notion",
@@ -910,6 +910,32 @@ func readableNotionParentFallback(parentID string) string {
 		return ""
 	}
 	return parentID
+}
+
+func cleanNotionParentLabel(label, workspace string) string {
+	label = strings.TrimSpace(label)
+	if label == "" || noisyNotionLabel(label) {
+		return notionWorkspaceParent(workspace)
+	}
+	return label
+}
+
+func noisyNotionLabel(label string) bool {
+	label = strings.TrimSpace(label)
+	if label == "" || looksLikeNotionID(label) {
+		return true
+	}
+	seenID := false
+	for _, field := range strings.Fields(label) {
+		token := strings.Trim(field, ".,;:()[]{}<>\"'")
+		if looksLikeNotionID(token) {
+			if seenID {
+				return true
+			}
+			seenID = true
+		}
+	}
+	return seenID && len([]rune(label)) > 80
 }
 
 func looksLikeNotionID(value string) bool {
