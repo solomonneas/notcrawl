@@ -626,6 +626,12 @@ func runSearch(ctx context.Context, stdout io.Writer, cfg config.Config, args []
 func runTUI(ctx context.Context, stdout io.Writer, cfg config.Config, args []string) error {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	fs.Usage = func() {
+		_, _ = fmt.Fprintln(fs.Output(), "Usage of tui:")
+		fs.PrintDefaults()
+		_, _ = fmt.Fprintln(fs.Output())
+		_, _ = fmt.Fprintln(fs.Output(), tui.ControlsHelp())
+	}
 	if hasHelpArg(args) {
 		fs.SetOutput(stdout)
 	}
@@ -1052,7 +1058,10 @@ func printTUIUsage(stdout io.Writer) error {
 	fs.Int("limit", 200, "maximum rows to load")
 	fs.String("kind", "all", "rows to browse: all, pages, databases")
 	fs.Bool("json", false, "print browser rows as JSON instead of opening the terminal UI")
-	fs.Usage()
+	_, _ = fmt.Fprintln(fs.Output(), "Usage of tui:")
+	fs.PrintDefaults()
+	_, _ = fmt.Fprintln(fs.Output())
+	_, _ = fmt.Fprintln(fs.Output(), tui.ControlsHelp())
 	return nil
 }
 

@@ -180,7 +180,7 @@ func TestTUIHelpReturnsUsage(t *testing.T) {
 	if err := run(context.Background(), []string{"tui", "--help"}, &stdout, &stderr); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout.String(), "Usage of tui:") || !strings.Contains(stdout.String(), "-limit") {
+	if !strings.Contains(stdout.String(), "Usage of tui:") || !strings.Contains(stdout.String(), "-limit") || !strings.Contains(stdout.String(), "right-click") || !strings.Contains(stdout.String(), "#              jump") {
 		t.Fatalf("tui help missing usage:\n%s", stdout.String())
 	}
 	if stderr.String() != "" {
