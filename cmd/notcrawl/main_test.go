@@ -86,6 +86,26 @@ func TestTUIJSONListsArchiveRowsWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestCollectionTUIRowsResolveParentCollectionNames(t *testing.T) {
+	rows := collectionTUIRows([]store.Collection{{
+		ID:          "child-db",
+		SpaceID:     "space1",
+		ParentID:    "parent-db",
+		ParentTable: "collection",
+		Name:        "Child",
+		Source:      "test",
+	}}, 10, nil, map[string]string{"parent-db": "Parent Database"}, map[string]string{"space1": "Workspace"})
+	if len(rows) != 1 {
+		t.Fatalf("rows = %#v", rows)
+	}
+	if rows[0].ParentID != "Parent Database" {
+		t.Fatalf("parent label = %q", rows[0].ParentID)
+	}
+	if rows[0].Scope != "Workspace" {
+		t.Fatalf("scope = %q", rows[0].Scope)
+	}
+}
+
 func TestHelpMentionsTUI(t *testing.T) {
 	var stdout bytes.Buffer
 	if err := run(context.Background(), []string{"--help"}, &stdout, &bytes.Buffer{}); err != nil {

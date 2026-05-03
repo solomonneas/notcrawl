@@ -704,7 +704,7 @@ func tuiRows(ctx context.Context, cfg config.Config, kind string, limit int) ([]
 		}
 		rows = append(rows, pageTUIRows(pages, limit, pageTitles, collectionNames, spaceNames, pagePreviews(ctx, st, pages, limit))...)
 		if len(rows) < limit {
-			rows = append(rows, collectionTUIRows(collections, limit-len(rows), pageTitles, spaceNames)...)
+			rows = append(rows, collectionTUIRows(collections, limit-len(rows), pageTitles, collectionNames, spaceNames)...)
 		}
 	case "pages", "page":
 		pages, err := st.Pages(ctx)
@@ -713,7 +713,7 @@ func tuiRows(ctx context.Context, cfg config.Config, kind string, limit int) ([]
 		}
 		rows = append(rows, pageTUIRows(pages, limit, pageTitles, collectionNames, spaceNames, pagePreviews(ctx, st, pages, limit))...)
 	case "databases", "database", "collections", "collection":
-		rows = append(rows, collectionTUIRows(collections, limit, pageTitles, spaceNames)...)
+		rows = append(rows, collectionTUIRows(collections, limit, pageTitles, collectionNames, spaceNames)...)
 	default:
 		return nil, fmt.Errorf("unknown tui kind %q", kind)
 	}
@@ -757,7 +757,7 @@ func pageTUIRows(pages []store.Page, limit int, pageTitles map[string]string, co
 	return items
 }
 
-func collectionTUIRows(collections []store.Collection, limit int, pageTitles map[string]string, spaceNames map[string]string) []tui.Row {
+func collectionTUIRows(collections []store.Collection, limit int, pageTitles map[string]string, collectionNames map[string]string, spaceNames map[string]string) []tui.Row {
 	if limit > len(collections) {
 		limit = len(collections)
 	}
@@ -768,7 +768,7 @@ func collectionTUIRows(collections []store.Collection, limit int, pageTitles map
 			title = collection.ID
 		}
 		space := firstNonEmpty(spaceNames[collection.SpaceID], collection.SpaceID)
-		parent := firstNonEmpty(notionParentLabel(collection.ParentTable, collection.ParentID, pageTitles, nil), notionWorkspaceParent(space))
+		parent := firstNonEmpty(notionParentLabel(collection.ParentTable, collection.ParentID, pageTitles, collectionNames), notionWorkspaceParent(space))
 		items = append(items, tui.Row{
 			Source:    "notion",
 			Kind:      "database",
