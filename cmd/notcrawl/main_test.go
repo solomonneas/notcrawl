@@ -124,7 +124,7 @@ func TestTUIRowsHideRawNotionParentIDs(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("rows = %#v", rows)
 	}
-	if rows[0].ParentID != "Comet.com" {
+	if rows[0].ParentID != "Workspace: Comet.com" {
 		t.Fatalf("parent label = %q", rows[0].ParentID)
 	}
 

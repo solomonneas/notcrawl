@@ -902,7 +902,9 @@ func notionParentLabel(parentTable, parentID string, pageTitles map[string]strin
 		}
 	case "space", "team", "workspace":
 		if spaceNames != nil {
-			return firstNonEmpty(spaceNames[parentID], "")
+			if name := firstNonEmpty(spaceNames[parentID], ""); name != "" {
+				return notionWorkspaceParent(name)
+			}
 		}
 	}
 	return firstNonEmpty(readableNotionParentFallback(parentID), "")
