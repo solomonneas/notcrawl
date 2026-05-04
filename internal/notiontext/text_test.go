@@ -72,6 +72,13 @@ func TestCleanLegacyArtifactsRemovesMentionOpcodes(t *testing.T) {
 	}
 }
 
+func TestCleanLegacyArtifactsCompactsRepeatedLinkedPages(t *testing.T) {
+	got := CleanLegacyArtifacts("ask ‣ p 24d71240-10a3-80ae-8bde-d59bf00682c0 00b8cbcf-c520-4790-999a-9c2940263721, ‣ p 24d71240-10a3-80d3-a3b0-c06884bad333 00b8cbcf-c520-4790-999a-9c2940263721, ‣ p 1de71240-10a3-809a-98f9-ea6f4d8702b3 00b8cbcf-c520-4790-999a-9c2940263721 Add notes")
+	if got != "ask linked pages Add notes" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestPlainWalksTitleOnlyOnce(t *testing.T) {
 	got := Plain(map[string]any{
 		"title": []any{map[string]any{

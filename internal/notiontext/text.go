@@ -18,6 +18,7 @@ var (
 	legacyBareMentionRE        = regexp.MustCompile(`‣\s+[0-9a-fA-F]{8}-[0-9a-fA-F-]{8,}`)
 	spaceBeforePunctuationRE   = regexp.MustCompile(`\s+([,.;:])`)
 	repeatedCommaRE            = regexp.MustCompile(`(?:,\s*){2,}`)
+	repeatedLinkedPageRE       = regexp.MustCompile(`(?:linked page,\s*){2,}linked page`)
 )
 
 func Normalize(s string) string {
@@ -33,6 +34,7 @@ func CleanLegacyArtifacts(s string) string {
 	s = legacyBareMentionRE.ReplaceAllString(s, "@mention")
 	s = Normalize(s)
 	s = repeatedCommaRE.ReplaceAllString(s, ", ")
+	s = repeatedLinkedPageRE.ReplaceAllString(s, "linked pages")
 	s = spaceBeforePunctuationRE.ReplaceAllString(s, "$1")
 	s = strings.ReplaceAll(s, " and, ", ", ")
 	return Normalize(s)
