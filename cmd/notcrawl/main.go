@@ -836,7 +836,7 @@ func pagePreview(blocks []store.Block, comments []store.Comment, maxLines int) s
 		lines = append(lines, "## Comments")
 		remaining--
 		for _, comment := range comments {
-			text := strings.TrimSpace(strings.Join(strings.Fields(comment.Text), " "))
+			text := notiontext.CleanLegacyArtifacts(comment.Text)
 			if text == "" {
 				continue
 			}
@@ -860,7 +860,7 @@ func blockPreviewLines(blocks []store.Block, maxLines int) []string {
 	}
 	lines := make([]string, 0, maxLines)
 	for _, block := range blocks {
-		text := strings.TrimSpace(strings.Join(strings.Fields(block.Text), " "))
+		text := notiontext.CleanLegacyArtifacts(block.Text)
 		if text == "" {
 			continue
 		}

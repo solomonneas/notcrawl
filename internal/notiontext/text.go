@@ -8,10 +8,22 @@ import (
 	"unicode"
 )
 
-var spaceRE = regexp.MustCompile(`\s+`)
+var (
+	spaceRE                    = regexp.MustCompile(`\s+`)
+	legacyInlineLinkArtifactRE = regexp.MustCompile(`\ba\s+((?:https?://|/)[^\s]+)`)
+	legacyInlineMarkArtifactRE = regexp.MustCompile(`\s+\b[bius]\b($|[\s,.;:])`)
+	legacyMentionArtifactRE    = regexp.MustCompile(`\bm\s+[0-9a-fA-F]{8}-[0-9a-fA-F-]{8,}(?:\s+[0-9a-fA-F-]{12,})?`)
+)
 
 func Normalize(s string) string {
 	return strings.TrimSpace(spaceRE.ReplaceAllString(s, " "))
+}
+
+func CleanLegacyArtifacts(s string) string {
+	s = legacyInlineLinkArtifactRE.ReplaceAllString(s, "<$1>")
+	s = legacyInlineMarkArtifactRE.ReplaceAllString(s, "$1")
+	s = legacyMentionArtifactRE.ReplaceAllString(s, "")
+	return Normalize(s)
 }
 
 func PlainFromJSON(raw string) string {
@@ -127,6 +139,10 @@ func walk(v any, parts *[]string) {
 			*parts = append(*parts, x)
 		}
 	case []any:
+		if text, ok := legacyRichTextPart(x); ok {
+			*parts = append(*parts, text)
+			return
+		}
 		for _, item := range x {
 			walk(item, parts)
 		}
@@ -149,6 +165,44 @@ func walk(v any, parts *[]string) {
 			}
 		}
 	}
+}
+
+func legacyRichTextPart(values []any) (string, bool) {
+	if len(values) == 0 {
+		return "", false
+	}
+	text, ok := normalizedString(values[0])
+	if !ok {
+		return "", false
+	}
+	if len(values) < 2 {
+		return text, true
+	}
+	if link := legacyAnnotationLink(values[1]); link != "" {
+		return Normalize(text + " <" + link + ">"), true
+	}
+	return text, true
+}
+
+func legacyAnnotationLink(value any) string {
+	values, ok := value.([]any)
+	if !ok {
+		return ""
+	}
+	for _, item := range values {
+		annotation, ok := item.([]any)
+		if !ok || len(annotation) < 2 {
+			continue
+		}
+		code, ok := annotation[0].(string)
+		if !ok || code != "a" {
+			continue
+		}
+		if link, ok := normalizedString(annotation[1]); ok {
+			return link
+		}
+	}
+	return ""
 }
 
 func richTextContent(v any) (string, bool) {

@@ -51,6 +51,20 @@ func TestPlainFallsBackToNotionTextContentOnce(t *testing.T) {
 	}
 }
 
+func TestPlainHandlesLegacyNotionAnnotations(t *testing.T) {
+	got := PlainFromJSON(`{"title":[["Marketing Customer Reference Rights",[["a","https://example.com/sheet"]]],[" "],["Product Marketing",[["b"]]]]}`)
+	if got != "Marketing Customer Reference Rights <https://example.com/sheet> Product Marketing" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestCleanLegacyArtifacts(t *testing.T) {
+	got := CleanLegacyArtifacts("Option A: b\nMarketing Customer Reference Rights a https://example.com/sheet\nm 35171240-10a3-80ff-95be-001c31559035 It works")
+	if got != "Option A: Marketing Customer Reference Rights <https://example.com/sheet> It works" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestPlainWalksTitleOnlyOnce(t *testing.T) {
 	got := Plain(map[string]any{
 		"title": []any{map[string]any{

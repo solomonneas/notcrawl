@@ -179,6 +179,21 @@ func TestBlockPreviewKeepsNotionPageShape(t *testing.T) {
 	}
 }
 
+func TestBlockPreviewCleansLegacyNotionMarkers(t *testing.T) {
+	got := blockPreview([]store.Block{
+		{Type: "paragraph", Text: "Option A: b"},
+		{Type: "paragraph", Text: "Marketing Customer Reference Rights a https://example.com/sheet"},
+	}, tuiPagePreviewMax)
+	if strings.Contains(got, " a https://") || strings.Contains(got, ": b") {
+		t.Fatalf("preview leaked legacy markers:\n%s", got)
+	}
+	for _, want := range []string{"Option A:", "Marketing Customer Reference Rights <https://example.com/sheet>"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("preview missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestPagePreviewIncludesComments(t *testing.T) {
 	got := pagePreview(
 		[]store.Block{{Type: "paragraph", Text: "status update"}},
