@@ -860,7 +860,7 @@ func blockPreviewLines(blocks []store.Block, maxLines int) []string {
 	}
 	lines := make([]string, 0, maxLines)
 	for _, block := range blocks {
-		text := notiontext.CleanLegacyArtifacts(block.Text)
+		text := compactPreviewNoise(notiontext.CleanLegacyArtifacts(block.Text))
 		if text == "" {
 			continue
 		}
@@ -889,6 +889,21 @@ func blockPreviewLines(blocks []store.Block, maxLines int) []string {
 		}
 	}
 	return lines
+}
+
+func compactPreviewNoise(s string) string {
+	s = strings.ReplaceAll(s, "linked pagess", "linked pages")
+	for strings.Contains(s, "linked page, linked page") ||
+		strings.Contains(s, "linked pages, linked page") ||
+		strings.Contains(s, "linked page, linked pages") ||
+		strings.Contains(s, "linked pages, linked pages") {
+		s = strings.ReplaceAll(s, "linked pages, linked page", "linked pages")
+		s = strings.ReplaceAll(s, "linked page, linked pages", "linked pages")
+		s = strings.ReplaceAll(s, "linked pages, linked pages", "linked pages")
+		s = strings.ReplaceAll(s, "linked page, linked page", "linked pages")
+		s = strings.ReplaceAll(s, "linked pagess", "linked pages")
+	}
+	return s
 }
 
 func collectionPreview(collection store.Collection, space, parent string) string {

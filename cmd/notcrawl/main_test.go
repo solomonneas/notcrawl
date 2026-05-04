@@ -194,6 +194,16 @@ func TestBlockPreviewCleansLegacyNotionMarkers(t *testing.T) {
 	}
 }
 
+func TestBlockPreviewCompactsRepeatedLinkedPages(t *testing.T) {
+	got := blockPreview([]store.Block{{
+		Type: "paragraph",
+		Text: "linked page, linked page, linked page Add details",
+	}}, tuiPagePreviewMax)
+	if got != "linked pages Add details" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestPagePreviewIncludesComments(t *testing.T) {
 	got := pagePreview(
 		[]store.Block{{Type: "paragraph", Text: "status update"}},
