@@ -86,6 +86,45 @@ func TestTUIJSONListsArchiveRowsWithoutMutation(t *testing.T) {
 	}
 }
 
+func TestTUIAllRowsIncludesDatabasesWhenPagesHitLimit(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "notcrawl.db")
+	st, err := store.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := store.NowMS()
+	if err := st.UpsertCollection(ctx, store.Collection{ID: "db1", Name: "Roadmap", Source: "test", SyncedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	for _, title := range []string{"Launch Plan", "Backlog"} {
+		if err := st.UpsertPage(ctx, store.Page{ID: title, CollectionID: "db1", Title: title, Alive: true, Source: "test", SyncedAt: now, LastEditedTime: now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = run(ctx, []string{"--config", filepath.Join(dir, "missing.toml"), "--db", dbPath, "tui", "--json", "--limit", "1"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("tui --json failed: %v\nstderr:\n%s", err, stderr.String())
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
+		t.Fatalf("invalid json: %v\n%s", err, stdout.String())
+	}
+	seen := map[string]bool{}
+	for _, row := range rows {
+		seen[fmt.Sprint(row["kind"])] = true
+	}
+	if !seen["page"] || !seen["database"] {
+		t.Fatalf("all rows should include pages and databases despite page limit: %#v", rows)
+	}
+}
+
 func TestCollectionTUIRowsResolveParentCollectionNames(t *testing.T) {
 	rows := collectionTUIRows([]store.Collection{{
 		ID:          "child-db",
