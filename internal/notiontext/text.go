@@ -27,10 +27,10 @@ func Normalize(s string) string {
 func CleanLegacyArtifacts(s string) string {
 	s = legacyInlineLinkArtifactRE.ReplaceAllString(s, "<$1>")
 	s = legacyInlineMarkArtifactRE.ReplaceAllString(s, "$1")
-	s = legacyMentionArtifactRE.ReplaceAllString(s, "")
-	s = legacyPageMentionRE.ReplaceAllString(s, "")
+	s = legacyMentionArtifactRE.ReplaceAllString(s, "@mention")
+	s = legacyPageMentionRE.ReplaceAllString(s, "linked page")
 	s = legacyLinkedMentionRE.ReplaceAllString(s, "‣ ")
-	s = legacyBareMentionRE.ReplaceAllString(s, "")
+	s = legacyBareMentionRE.ReplaceAllString(s, "@mention")
 	s = Normalize(s)
 	s = repeatedCommaRE.ReplaceAllString(s, ", ")
 	s = spaceBeforePunctuationRE.ReplaceAllString(s, "$1")
