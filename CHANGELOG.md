@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Depend on `github.com/vincentkoc/crawlkit v0.4.0` for shared config,
+  status/control, snapshot, mirror, output, and terminal explorer mechanics.
+- Keep Notion API/Desktop parsing, Markdown rendering, page/comment/database
+  schemas, Notion FTS body construction, and data-source compatibility
+  app-owned while the shared mechanics move to crawlkit.
+- Document the gitcrawl-style document TUI shape: workspace/teamspace/page or
+  database groups, page/database rows, preview/comment detail, sorting, mouse
+  selection, right-click actions, and local/remote status chrome.
 - Add crawlkit control metadata/status surfaces with `metadata --json`, `status --json`, and `doctor --json`.
 - Report primary archive and desktop-cache SQLite inventories in status JSON for shared local control surfaces.
 - Add `notcrawl tui`, a local terminal browser for archived pages and databases backed by `crawlkit/tui`.

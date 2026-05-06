@@ -77,6 +77,8 @@ Default paths:
 - `init` writes a starter config
 - `doctor` checks config, SQLite, desktop cache, and token presence
 - `status` prints archive counts, last sync time, and database/WAL size
+- `metadata --json`, `status --json`, and `doctor --json` expose crawlkit
+  control/status payloads for launchers, automation, and CI
 - `report` summarizes recent page, database, space, and comment activity
 - `maintain` rebuilds FTS, optimizes SQLite indexes, and can run `VACUUM`
 - `sync` ingests from `desktop`, `api`, or `all`
@@ -89,6 +91,20 @@ Default paths:
 - `publish` exports SQLite tables and Markdown into a git share repo
 - `subscribe` clones a share repo and imports the latest snapshot
 - `update` pulls and imports a subscribed share repo
+
+## Shared crawlkit surfaces
+
+`notcrawl` uses `crawlkit` for standard config paths, SQLite open/read helpers,
+snapshot packing/import, git-backed archive sharing, output formatting, status
+payloads, and the shared terminal explorer. Notion API/Desktop parsing,
+Markdown rendering, page/comment/database schemas, and Notion FTS bodies remain
+owned by `notcrawl`.
+
+The TUI follows the gitcrawl-style three-pane model: workspace/teamspace/page or
+database groups on the left, pages/databases in the middle, and a readable
+document preview plus comments and metadata on the right. It supports pane
+focus, sortable headers, mouse selection, right-click actions, and a
+local/remote footer.
 
 ## Distribution
 
