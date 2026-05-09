@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alecthomas/kong"
 	"github.com/vincentkoc/crawlkit/control"
 	"github.com/vincentkoc/crawlkit/progress"
 	"github.com/vincentkoc/crawlkit/tui"
@@ -40,27 +41,19 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+	if len(args) == 0 || rootHelpRequested(args, "config", "db") {
 		printHelp(stdout)
 		return nil
 	}
-	global := flag.NewFlagSet("notcrawl", flag.ContinueOnError)
-	global.SetOutput(io.Discard)
-	configPath := global.String("config", "", "config file path")
-	dbPath := global.String("db", "", "database path override")
-	versionFlag := global.Bool("version", false, "print version and exit")
-	if err := global.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printHelp(stdout)
-			return nil
-		}
+	var global notcrawlRootArgs
+	if err := parseKongArgs(&global, args, "notcrawl", stdout, stderr); err != nil {
 		return err
 	}
-	if *versionFlag {
+	if global.Version {
 		fmt.Fprintln(stdout, version)
 		return nil
 	}
-	rest := global.Args()
+	rest := global.Args
 	if len(rest) == 0 || rest[0] == "help" || rest[0] == "--help" || rest[0] == "-h" {
 		printHelp(stdout)
 		return nil
@@ -79,7 +72,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			printInitUsage(stdout)
 			return nil
 		}
-		path, err := config.WriteStarter(*configPath)
+		path, err := config.WriteStarter(global.Config)
 		if err != nil {
 			return err
 		}
@@ -89,12 +82,20 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if cmd == "tui" && hasHelpArg(cmdArgs) {
 		return printTUIUsage(stdout)
 	}
-	cfg, err := config.Load(*configPath)
+	if cmd == "search" && hasHelpArg(cmdArgs) {
+		printSearchUsage(stdout)
+		return nil
+	}
+	if cmd == "sql" && hasHelpArg(cmdArgs) {
+		printSQLUsage(stdout)
+		return nil
+	}
+	cfg, err := config.Load(global.Config)
 	if err != nil {
 		return err
 	}
-	if *dbPath != "" {
-		cfg.DBPath, err = config.ExpandPath(*dbPath)
+	if global.DB != "" {
+		cfg.DBPath, err = config.ExpandPath(global.DB)
 		if err != nil {
 			return err
 		}
@@ -133,6 +134,54 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	default:
 		return fmt.Errorf("unknown command %q", cmd)
 	}
+}
+
+type notcrawlRootArgs struct {
+	Config  string   `help:"Config file path."`
+	DB      string   `name:"db" help:"Database path override."`
+	Version bool     `help:"Print version and exit."`
+	Args    []string `arg:"" optional:"" passthrough:"partial" name:"command" help:"Command and arguments."`
+}
+
+func parseKongArgs(target any, args []string, name string, stdout, stderr io.Writer, options ...kong.Option) error {
+	opts := []kong.Option{
+		kong.Name(name),
+		kong.NoDefaultHelp(),
+		kong.Writers(stdout, stderr),
+		kong.Exit(func(int) {}),
+	}
+	opts = append(opts, options...)
+	parser, err := kong.New(target, opts...)
+	if err != nil {
+		return err
+	}
+	_, err = parser.Parse(args)
+	return err
+}
+
+func rootHelpRequested(args []string, valueFlags ...string) bool {
+	valueFlagSet := make(map[string]struct{}, len(valueFlags))
+	for _, flag := range valueFlags {
+		valueFlagSet[flag] = struct{}{}
+	}
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--help" || arg == "-h" || (arg == "help" && i == len(args)-1) {
+			return true
+		}
+		if !strings.HasPrefix(arg, "-") {
+			return false
+		}
+		if strings.HasPrefix(arg, "--") {
+			name := strings.TrimPrefix(arg, "--")
+			if before, _, ok := strings.Cut(name, "="); ok {
+				name = before
+			} else if _, ok := valueFlagSet[name]; ok {
+				i++
+			}
+		}
+	}
+	return false
 }
 
 func runDoctor(ctx context.Context, stdout io.Writer, cfg config.Config, args []string) error {
@@ -615,15 +664,19 @@ func exportDatabaseFilename(collection store.Collection, ext string, used map[st
 }
 
 func runSearch(ctx context.Context, stdout io.Writer, cfg config.Config, args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("search query required")
+	var parsed notcrawlSearchArgs
+	if err := parseKongArgs(&parsed, normalizeSingleDashLongFlags(args, "limit"), "notcrawl search", stdout, io.Discard); err != nil {
+		return err
+	}
+	if parsed.Limit <= 0 {
+		return fmt.Errorf("search --limit must be positive")
 	}
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
 		return err
 	}
 	defer st.Close()
-	results, err := st.Search(ctx, strings.Join(args, " "), 20)
+	results, err := st.Search(ctx, strings.Join(parsed.Query, " "), parsed.Limit)
 	if err != nil {
 		return err
 	}
@@ -631,6 +684,11 @@ func runSearch(ctx context.Context, stdout io.Writer, cfg config.Config, args []
 		fmt.Fprintf(stdout, "%s\t%s\t%s\t%s\n", searchField(r.Kind), searchField(r.ID), searchField(r.Title), searchField(r.Text))
 	}
 	return nil
+}
+
+type notcrawlSearchArgs struct {
+	Limit int      `default:"20" help:"Maximum results."`
+	Query []string `arg:"" name:"query" help:"Search query."`
 }
 
 func runTUI(ctx context.Context, stdout io.Writer, cfg config.Config, args []string) error {
@@ -1077,10 +1135,14 @@ func searchField(s string) string {
 }
 
 func runSQL(ctx context.Context, stdout io.Writer, cfg config.Config, args []string) error {
-	if len(args) == 0 {
+	var parsed notcrawlSQLArgs
+	if err := parseKongArgs(&parsed, args, "notcrawl sql", stdout, io.Discard); err != nil {
+		return err
+	}
+	if len(parsed.Query) == 0 {
 		return fmt.Errorf("sql query required")
 	}
-	query := strings.TrimSpace(strings.Join(args, " "))
+	query := strings.TrimSpace(strings.Join(parsed.Query, " "))
 	if !isReadOnlyQuery(query) {
 		return fmt.Errorf("only read-only select/with/pragma queries are allowed")
 	}
@@ -1095,6 +1157,27 @@ func runSQL(ctx context.Context, stdout io.Writer, cfg config.Config, args []str
 	}
 	defer rows.Close()
 	return printRows(stdout, rows)
+}
+
+type notcrawlSQLArgs struct {
+	Query []string `arg:"" optional:"" passthrough:"all" name:"query" help:"Read-only SQL query."`
+}
+
+func printSearchUsage(w io.Writer) {
+	fmt.Fprint(w, `Usage of search:
+  notcrawl search [--limit N] QUERY
+
+Flags:
+  --limit N   maximum results (default 20)
+`)
+}
+
+func printSQLUsage(w io.Writer) {
+	fmt.Fprint(w, `Usage of sql:
+  notcrawl sql QUERY
+
+Runs a read-only SELECT, WITH, or PRAGMA query against the local archive.
+`)
 }
 
 func runPublish(ctx context.Context, stdout io.Writer, cfg config.Config, args []string) error {
@@ -1213,6 +1296,30 @@ func hasHelpArg(args []string) bool {
 	return false
 }
 
+func normalizeSingleDashLongFlags(args []string, names ...string) []string {
+	allowed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		allowed[name] = struct{}{}
+	}
+	out := make([]string, len(args))
+	for i, arg := range args {
+		if strings.HasPrefix(arg, "--") || !strings.HasPrefix(arg, "-") || strings.HasPrefix(arg, "-=") {
+			out[i] = arg
+			continue
+		}
+		name := strings.TrimPrefix(arg, "-")
+		if before, _, ok := strings.Cut(name, "="); ok {
+			name = before
+		}
+		if _, ok := allowed[name]; ok {
+			out[i] = "-" + arg
+			continue
+		}
+		out[i] = arg
+	}
+	return out
+}
+
 func printTUIUsage(stdout io.Writer) error {
 	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
 	fs.SetOutput(stdout)
@@ -1264,7 +1371,7 @@ Commands:
   databases                 List crawled Notion databases
   export-db --database ID   Export a database as CSV or TSV
   export-db --all --dir DIR Export every database as CSV or TSV
-  search QUERY              Search page text
+  search [--limit N] QUERY  Search page text
   tui                       Browse pages and databases in the terminal UI
   sql QUERY                 Run read-only SQL
   publish [--push]          Export data and Markdown into a git share repo

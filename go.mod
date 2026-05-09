@@ -2,7 +2,10 @@ module github.com/vincentkoc/notcrawl
 
 go 1.26.2
 
-require modernc.org/sqlite v1.50.0
+require (
+	github.com/alecthomas/kong v1.15.0
+	modernc.org/sqlite v1.50.0
+)
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

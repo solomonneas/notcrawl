@@ -328,6 +328,27 @@ func TestInitHelpDoesNotWriteConfig(t *testing.T) {
 	}
 }
 
+func TestReadCommandHelpDoesNotLoadConfig(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "missing.toml")
+	for _, args := range [][]string{
+		{"--config", configPath, "search", "--help"},
+		{"--config", configPath, "sql", "--help"},
+	} {
+		var stdout, stderr bytes.Buffer
+		err := run(context.Background(), args, &stdout, &stderr)
+		if err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+		if !strings.Contains(stdout.String(), "Usage of") {
+			t.Fatalf("%v help missing usage:\n%s", args, stdout.String())
+		}
+		if stderr.String() != "" {
+			t.Fatalf("%v unexpected stderr:\n%s", args, stderr.String())
+		}
+	}
+}
+
 func TestVersionFlagWorksWithOtherGlobalFlags(t *testing.T) {
 	var stdout bytes.Buffer
 	err := run(context.Background(), []string{"--config", filepath.Join(t.TempDir(), "missing.toml"), "--version"}, &stdout, &bytes.Buffer{})

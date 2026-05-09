@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.3.7 - Unreleased
+
+- Move top-level CLI parsing plus `search` and `sql` argument parsing onto Kong while preserving existing help, config, and output behavior.
+- Support `notcrawl search --help`, `notcrawl sql --help`, and `notcrawl search --limit N` without loading config for help output.
 
 - Bump routine GitHub Actions dependencies.
 
