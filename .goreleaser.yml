@@ -50,7 +50,7 @@ nfpms:
       - notcrawl
     package_name: notcrawl
     file_name_template: "{{ .ConventionalFileName }}"
-    homepage: https://github.com/vincentkoc/notcrawl
+    homepage: https://github.com/openclaw/notcrawl
     maintainer: Vincent Koc <vincent@vincentkoc.com>
     description: Local-first Notion crawler into SQLite and normalized Markdown.
     license: MIT

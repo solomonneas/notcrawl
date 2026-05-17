@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vincentkoc/notcrawl/internal/store"
+	"github.com/openclaw/notcrawl/internal/store"
 )
 
 func TestBuildReport(t *testing.T) {

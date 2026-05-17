@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/vincentkoc/notcrawl/internal/store"
+	"github.com/openclaw/notcrawl/internal/store"
 )
 
 func TestSyncIngestsDatabasesAndRows(t *testing.T) {

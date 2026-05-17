@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vincentkoc/notcrawl/internal/notiontext"
-	"github.com/vincentkoc/notcrawl/internal/store"
+	"github.com/openclaw/notcrawl/internal/notiontext"
+	"github.com/openclaw/notcrawl/internal/store"
 )
 
 type Exporter struct {

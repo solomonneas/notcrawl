@@ -8,7 +8,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/vincentkoc/notcrawl/internal/store"
+	"github.com/openclaw/notcrawl/internal/store"
 )
 
 func TestExporterWritesMarkdown(t *testing.T) {

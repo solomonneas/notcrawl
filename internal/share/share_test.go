@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vincentkoc/notcrawl/internal/markdown"
-	"github.com/vincentkoc/notcrawl/internal/store"
+	"github.com/openclaw/notcrawl/internal/markdown"
+	"github.com/openclaw/notcrawl/internal/store"
 )
 
 func TestPublishAndImportSnapshot(t *testing.T) {

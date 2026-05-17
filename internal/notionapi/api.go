@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vincentkoc/notcrawl/internal/notiontext"
-	"github.com/vincentkoc/notcrawl/internal/store"
+	"github.com/openclaw/notcrawl/internal/notiontext"
+	"github.com/openclaw/notcrawl/internal/store"
 )
 
 const SourceName = "api"

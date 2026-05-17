@@ -1,4 +1,4 @@
-module github.com/vincentkoc/notcrawl
+module github.com/openclaw/notcrawl
 
 go 1.26.3
 

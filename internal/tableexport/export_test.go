@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vincentkoc/notcrawl/internal/store"
+	"github.com/openclaw/notcrawl/internal/store"
 )
 
 func TestExportDatabaseTSV(t *testing.T) {

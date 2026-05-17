@@ -37,7 +37,7 @@ brew install notcrawl
 ```
 
 You can also download archives, `.deb`, or `.rpm` packages from the
-[latest release](https://github.com/vincentkoc/notcrawl/releases/latest).
+[latest release](https://github.com/openclaw/notcrawl/releases/latest).
 
 ## Quick Start
 
