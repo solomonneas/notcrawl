@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 - Unreleased
+
+- Update `crawlkit` to v0.9.0.
+
 ## 0.4.0 - 2026-05-18
 
 - Move top-level CLI parsing plus `search` and `sql` argument parsing onto Kong while preserving existing help, config, and output behavior.
