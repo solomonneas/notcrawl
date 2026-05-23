@@ -381,7 +381,7 @@ func (c Client) walkBlocks(ctx context.Context, st *store.Store, pageID, parentI
 				return count, err
 			}
 			count++
-			if truthy(block["has_children"]) {
+			if shouldFetchBlockChildren(block) {
 				n, err := c.walkBlocks(ctx, st, pageID, block.string("id"), spaceID)
 				if err != nil {
 					return count, err
@@ -397,6 +397,24 @@ func (c Client) walkBlocks(ctx context.Context, st *store.Store, pageID, parentI
 			return count, nil
 		}
 	}
+}
+
+func shouldFetchBlockChildren(block obj) bool {
+	if !truthy(block["has_children"]) {
+		return false
+	}
+	return !isSyncedBlockCopy(block)
+}
+
+func isSyncedBlockCopy(block obj) bool {
+	if block.string("type") != "synced_block" {
+		return false
+	}
+	body := block.mapObj("synced_block")
+	if len(body) == 0 {
+		return false
+	}
+	return len(body.mapObj("synced_from")) > 0
 }
 
 func (c Client) ingestComments(ctx context.Context, st *store.Store, pageID, spaceID string) (int, error) {

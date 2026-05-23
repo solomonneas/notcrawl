@@ -214,6 +214,125 @@ func TestIngestCommentsSkipsRestrictedResource(t *testing.T) {
 	}
 }
 
+func TestWalkBlocksSkipsSyncedBlockCopyChildren(t *testing.T) {
+	requestedCopyChildren := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/blocks/page1/children":
+			_, _ = w.Write([]byte(`{
+				"object":"list",
+				"results":[{
+					"object":"block",
+					"id":"copy1",
+					"type":"synced_block",
+					"has_children":true,
+					"created_time":"2026-01-01T00:00:00Z",
+					"last_edited_time":"2026-01-01T00:00:00Z",
+					"synced_block":{"synced_from":{"type":"block_id","block_id":"source1"}}
+				}],
+				"has_more":false
+			}`))
+		case "/blocks/copy1/children":
+			requestedCopyChildren = true
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"object":"error","status":404,"code":"object_not_found","message":"not found"}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "notcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	count, err := (Client{BaseURL: server.URL, Version: "2026-03-11", Token: "secret", HTTP: http.DefaultClient}).walkBlocks(context.Background(), st, "page1", "page1", "space1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requestedCopyChildren {
+		t.Fatal("copied synced block children endpoint was requested")
+	}
+	if count != 1 {
+		t.Fatalf("unexpected block count: %d", count)
+	}
+	blocks, err := st.PageBlocks(context.Background(), "page1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocks) != 1 || blocks[0].ID != "copy1" || blocks[0].Type != "synced_block" {
+		t.Fatalf("unexpected blocks: %+v", blocks)
+	}
+}
+
+func TestWalkBlocksFetchesOriginalSyncedBlockChildren(t *testing.T) {
+	requestedSourceChildren := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/blocks/page1/children":
+			_, _ = w.Write([]byte(`{
+				"object":"list",
+				"results":[{
+					"object":"block",
+					"id":"source1",
+					"type":"synced_block",
+					"has_children":true,
+					"created_time":"2026-01-01T00:00:00Z",
+					"last_edited_time":"2026-01-01T00:00:00Z",
+					"synced_block":{}
+				}],
+				"has_more":false
+			}`))
+		case "/blocks/source1/children":
+			requestedSourceChildren = true
+			_, _ = w.Write([]byte(`{
+				"object":"list",
+				"results":[{
+					"object":"block",
+					"id":"child1",
+					"type":"paragraph",
+					"has_children":false,
+					"created_time":"2026-01-01T00:00:00Z",
+					"last_edited_time":"2026-01-01T00:00:00Z",
+					"paragraph":{"rich_text":[{"type":"text","plain_text":"Source child","text":{"content":"Source child"}}]}
+				}],
+				"has_more":false
+			}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "notcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	count, err := (Client{BaseURL: server.URL, Version: "2026-03-11", Token: "secret", HTTP: http.DefaultClient}).walkBlocks(context.Background(), st, "page1", "page1", "space1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !requestedSourceChildren {
+		t.Fatal("original synced block children endpoint was not requested")
+	}
+	if count != 2 {
+		t.Fatalf("unexpected block count: %d", count)
+	}
+	blocks, err := st.PageBlocks(context.Background(), "page1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(blocks) != 2 || blocks[0].ID != "source1" || blocks[1].ID != "child1" {
+		t.Fatalf("unexpected blocks: %+v", blocks)
+	}
+}
+
 func TestIngestCommentsRetriesTransientGatewayError(t *testing.T) {
 	attempts := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
