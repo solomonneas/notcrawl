@@ -438,6 +438,7 @@ func runSync(ctx context.Context, stdout, stderr io.Writer, cfg config.Config, a
 		}
 		completed++
 		tracker.Set(completed, "phase", "api", "pages", s.Pages, "databases", s.Databases, "blocks", s.Blocks)
+		writeAPIWarnings(stderr, s)
 		fmt.Fprintf(stdout, "api: users=%d pages=%d databases=%d database_rows=%d blocks=%d comments=%d\n", s.Users, s.Pages, s.Databases, s.DatabaseRows, s.Blocks, s.Comments)
 	case "all":
 		if cfg.Notion.Desktop.Enabled {
@@ -460,12 +461,22 @@ func runSync(ctx context.Context, stdout, stderr io.Writer, cfg config.Config, a
 			}
 			completed++
 			tracker.Set(completed, "phase", "api", "pages", s.Pages, "databases", s.Databases, "blocks", s.Blocks)
+			writeAPIWarnings(stderr, s)
 			fmt.Fprintf(stdout, "api: users=%d pages=%d databases=%d database_rows=%d blocks=%d comments=%d\n", s.Users, s.Pages, s.Databases, s.DatabaseRows, s.Blocks, s.Comments)
 		}
 	default:
 		return fmt.Errorf("unknown source %q", *source)
 	}
 	return nil
+}
+
+func writeAPIWarnings(w io.Writer, s notionapi.Summary) {
+	for _, warning := range s.Warnings {
+		if strings.TrimSpace(warning) == "" {
+			continue
+		}
+		fmt.Fprintf(w, "warning: %s\n", warning)
+	}
 }
 
 func progressLogger(w io.Writer) *slog.Logger {

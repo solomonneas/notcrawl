@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openclaw/notcrawl/internal/notionapi"
 	"github.com/openclaw/notcrawl/internal/store"
 )
 
@@ -401,6 +402,25 @@ func TestSyncEmitsProgressPercentToStderr(t *testing.T) {
 		if !strings.Contains(logs, want) {
 			t.Fatalf("missing %q in progress logs:\n%s", want, logs)
 		}
+	}
+}
+
+func TestWriteAPIWarnings(t *testing.T) {
+	var stderr bytes.Buffer
+	writeAPIWarnings(&stderr, notionapi.Summary{
+		Warnings: []string{"Notion API user listing is forbidden.", "   ", "Notion API discovery returned zero pages."},
+	})
+	got := stderr.String()
+	for _, want := range []string{
+		"warning: Notion API user listing is forbidden.\n",
+		"warning: Notion API discovery returned zero pages.\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("missing %q in warnings:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "warning:    ") {
+		t.Fatalf("blank warning should be skipped:\n%s", got)
 	}
 }
 

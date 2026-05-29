@@ -3,6 +3,7 @@
 ## 0.4.1 - Unreleased
 
 - Update `crawlkit` to v0.7.0.
+- API sync now tolerates Notion `restricted_resource` failures from `/users`, continues page/database discovery without user labels, and warns when API discovery returns no pages, databases, blocks, or comments. Thanks @elijahmuraoka.
 - API sync now skips fetching copied synced-block children that Notion reports as `object_not_found`, while still storing the synced-block copy. Thanks @elijahmuraoka.
 
 ## 0.4.0 - 2026-05-18

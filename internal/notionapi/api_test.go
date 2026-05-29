@@ -214,6 +214,102 @@ func TestIngestCommentsSkipsRestrictedResource(t *testing.T) {
 	}
 }
 
+func TestSyncSkipsRestrictedResourceUsersAndContinuesDiscovery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/users":
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"object":"error","status":403,"code":"restricted_resource","message":"Personal access tokens cannot list users."}`))
+		case "/search":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			filter := body["filter"].(map[string]any)
+			switch filter["value"] {
+			case "page":
+				_, _ = w.Write([]byte(`{
+					"object":"list",
+					"results":[{
+						"object":"page",
+						"id":"page1",
+						"created_time":"2026-01-01T00:00:00Z",
+						"last_edited_time":"2026-01-02T00:00:00Z",
+						"archived":false,
+						"in_trash":false,
+						"url":"https://notion.so/page1",
+						"parent":{"type":"workspace","workspace":true},
+						"properties":{"Name":{"id":"title","type":"title","title":[{"type":"text","plain_text":"Shared page","text":{"content":"Shared page"}}]}}
+					}],
+					"has_more":false
+				}`))
+			case "database":
+				_, _ = w.Write([]byte(`{"object":"list","results":[],"has_more":false}`))
+			default:
+				t.Fatalf("unexpected search filter: %v", filter["value"])
+			}
+		case "/blocks/page1/children":
+			_, _ = w.Write([]byte(`{"object":"list","results":[],"has_more":false}`))
+		case "/comments":
+			_, _ = w.Write([]byte(`{"object":"list","results":[],"has_more":false}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "notcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	summary, err := (Client{BaseURL: server.URL, Version: "2022-06-28", Token: "secret"}).Sync(context.Background(), st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Users != 0 || summary.Pages != 1 || len(summary.Warnings) != 1 {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+	if summary.Warnings[0] != "Notion API user listing is forbidden; continuing without user labels." {
+		t.Fatalf("unexpected warning: %q", summary.Warnings[0])
+	}
+}
+
+func TestSyncWarnsWhenAPIDiscoveryReturnsNothing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/users", "/search":
+			_, _ = w.Write([]byte(`{"object":"list","results":[],"has_more":false}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.String())
+		}
+	}))
+	defer server.Close()
+
+	st, err := store.Open(filepath.Join(t.TempDir(), "notcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := st.UpsertPage(context.Background(), store.Page{ID: "local-page", Title: "Existing", Alive: true, Source: "desktop", SyncedAt: store.NowMS()}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := (Client{BaseURL: server.URL, Version: "2022-06-28", Token: "secret"}).Sync(context.Background(), st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Pages != 0 || summary.Databases != 0 || len(summary.Warnings) != 1 {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+	if want := "Notion API discovery returned zero pages, databases, blocks, and comments; check integration sharing and token scope. Existing local mirror still has 1 pages."; summary.Warnings[0] != want {
+		t.Fatalf("unexpected warning:\nwant: %q\n got: %q", want, summary.Warnings[0])
+	}
+}
+
 func TestWalkBlocksSkipsSyncedBlockCopyChildren(t *testing.T) {
 	requestedCopyChildren := false
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -33,6 +33,7 @@ type Summary struct {
 	Comments     int
 	Databases    int
 	DatabaseRows int
+	Warnings     []string
 }
 
 func (c Client) Sync(ctx context.Context, st *store.Store) (Summary, error) {
@@ -52,16 +53,20 @@ func (c Client) Sync(ctx context.Context, st *store.Store) (Summary, error) {
 	if err := st.DeferPageFTS(ctx, func() error {
 		users, err := c.listUsers(ctx)
 		if err != nil {
-			return err
-		}
-		for _, u := range users {
-			raw := notiontext.MarshalRaw(u)
-			if err := st.UpsertUser(ctx, store.User{
-				ID: u.string("id"), Name: userName(u), Email: userEmail(u), RawJSON: raw, Source: SourceName, SyncedAt: store.NowMS(),
-			}); err != nil {
+			if !isRestrictedResourceError(err) {
 				return err
 			}
-			s.Users++
+			s.Warnings = append(s.Warnings, "Notion API user listing is forbidden; continuing without user labels.")
+		} else {
+			for _, u := range users {
+				raw := notiontext.MarshalRaw(u)
+				if err := st.UpsertUser(ctx, store.User{
+					ID: u.string("id"), Name: userName(u), Email: userEmail(u), RawJSON: raw, Source: SourceName, SyncedAt: store.NowMS(),
+				}); err != nil {
+					return err
+				}
+				s.Users++
+			}
 		}
 		pages, err := c.searchPages(ctx)
 		if err != nil {
@@ -87,6 +92,17 @@ func (c Client) Sync(ctx context.Context, st *store.Store) (Summary, error) {
 			}
 			s.Databases++
 			s.DatabaseRows += rows
+		}
+		if s.Pages == 0 && s.Databases == 0 && s.Blocks == 0 && s.Comments == 0 {
+			status, err := st.Status(ctx)
+			if err != nil {
+				return err
+			}
+			warning := "Notion API discovery returned zero pages, databases, blocks, and comments; check integration sharing and token scope."
+			if status.Pages > 0 {
+				warning = fmt.Sprintf("%s Existing local mirror still has %d pages.", warning, status.Pages)
+			}
+			s.Warnings = append(s.Warnings, warning)
 		}
 		if err := st.SetSyncState(ctx, SourceName, "workspace", "default", time.Now().Format(time.RFC3339)); err != nil {
 			return err
@@ -611,7 +627,12 @@ func isIgnoredCommentError(err error) bool {
 	if apiErr.StatusCode == http.StatusNotFound || apiErr.Code == "not_found" {
 		return true
 	}
-	return apiErr.StatusCode == http.StatusForbidden && apiErr.Code == "restricted_resource"
+	return isRestrictedResourceError(err)
+}
+
+func isRestrictedResourceError(err error) bool {
+	apiErr, ok := err.(notionAPIError)
+	return ok && apiErr.StatusCode == http.StatusForbidden && apiErr.Code == "restricted_resource"
 }
 
 func userName(u obj) string {
