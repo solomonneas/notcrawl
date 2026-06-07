@@ -834,10 +834,18 @@ func (s *Store) upsertRecordSource(ctx context.Context, recordTable, recordID, s
 }
 
 func sourcePreferred(incoming, current string) bool {
-	if incoming == "api" {
-		return current != "api"
+	return sourcePriority(incoming) >= sourcePriority(current)
+}
+
+func sourcePriority(source string) int {
+	switch source {
+	case SourceAPI:
+		return 3
+	case SourceNotionMCP:
+		return 2
+	default:
+		return 1
 	}
-	return current != "api"
 }
 
 func (s *Store) preferredFallbackPayload(ctx context.Context, recordTable, recordID, source, incoming string) (string, error) {
@@ -1025,7 +1033,7 @@ func (s *Store) promoteFallbackRecord(ctx context.Context, recordTable, recordID
 	err := s.queryRowContext(ctx, `select source, payload_json
 		from record_sources
 		where record_table = ? and record_id = ? and alive = 1 and coalesce(payload_json, '') <> ''
-		order by case when source = 'api' then 0 else 1 end, synced_at desc
+		order by case source when 'api' then 0 when 'notion-mcp' then 1 else 2 end, synced_at desc
 		limit 1`, recordTable, recordID).Scan(&source, &payload)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
@@ -1130,12 +1138,23 @@ func (s *Store) commentByID(ctx context.Context, id string) (Comment, error) {
 }
 
 func (s *Store) RecordHasLiveSource(ctx context.Context, recordTable, recordID, source string) (bool, error) {
+	_, alive, err := s.RecordSourceState(ctx, recordTable, recordID, source)
+	return alive, err
+}
+
+func (s *Store) RecordSourceState(ctx context.Context, recordTable, recordID, source string) (bool, bool, error) {
 	var exists int
-	err := s.queryRowContext(ctx, `select exists(
-		select 1 from record_sources
-		where record_table = ? and record_id = ? and source = ? and alive = 1
-	)`, recordTable, recordID, source).Scan(&exists)
-	return exists != 0, err
+	var alive int
+	err := s.queryRowContext(ctx, `select 1, alive from record_sources
+		where record_table = ? and record_id = ? and source = ?`,
+		recordTable, recordID, source).Scan(&exists, &alive)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+	return exists != 0, IntBool(alive), nil
 }
 
 func (s *Store) refreshRecordAlive(ctx context.Context, recordTable, recordID string) error {
@@ -1269,17 +1288,27 @@ func (s *Store) UpsertRawRecord(ctx context.Context, x RawRecord) error {
 }
 
 func (s *Store) SetSyncState(ctx context.Context, source, entityType, entityID, cursor string) error {
-	_, err := s.execContext(ctx, `insert into sync_state(source, entity_type, entity_id, cursor, synced_at)
+	if _, err := s.execContext(ctx, `insert into sync_state(source, entity_type, entity_id, cursor, synced_at)
 		values (?, ?, ?, ?, ?)
 		on conflict(source, entity_type, entity_id) do update set cursor=excluded.cursor, synced_at=excluded.synced_at`,
-		source, entityType, entityID, cursor, NowMS())
-	return err
+		source, entityType, entityID, cursor, NowMS()); err != nil {
+		return err
+	}
+	if entityType == "page_blocks" {
+		return s.markPageFTS(ctx, entityID)
+	}
+	return nil
 }
 
 func (s *Store) ClearSyncState(ctx context.Context, source, entityType, entityID string) error {
-	_, err := s.execContext(ctx, `delete from sync_state
-		where source = ? and entity_type = ? and entity_id = ?`, source, entityType, entityID)
-	return err
+	if _, err := s.execContext(ctx, `delete from sync_state
+		where source = ? and entity_type = ? and entity_id = ?`, source, entityType, entityID); err != nil {
+		return err
+	}
+	if entityType == "page_blocks" {
+		return s.markPageFTS(ctx, entityID)
+	}
+	return nil
 }
 
 func (s *Store) HasSyncState(ctx context.Context, source, entityType, entityID string) (bool, error) {
@@ -1289,6 +1318,46 @@ func (s *Store) HasSyncState(ctx context.Context, source, entityType, entityID s
 		where source = ? and entity_type = ? and entity_id = ?
 	)`, source, entityType, entityID).Scan(&exists)
 	return exists != 0, err
+}
+
+func (s *Store) SyncStateCursor(ctx context.Context, source, entityType, entityID string) (string, bool, error) {
+	var cursor sql.NullString
+	err := s.queryRowContext(ctx, `select cursor from sync_state
+		where source = ? and entity_type = ? and entity_id = ?`,
+		source, entityType, entityID).Scan(&cursor)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return cursor.String, true, nil
+}
+
+func (s *Store) PageForSource(ctx context.Context, pageID, source string) (Page, bool, error) {
+	canonicalSource, canonicalLive, exists, err := s.canonicalRecordSource(ctx, "page", pageID)
+	if err != nil {
+		return Page{}, false, err
+	}
+	if exists && canonicalLive && canonicalSource == source {
+		page, err := s.pageByID(ctx, pageID)
+		return page, err == nil, err
+	}
+	var payload sql.NullString
+	err = s.queryRowContext(ctx, `select payload_json from record_sources
+		where record_table = 'page' and record_id = ? and source = ? and alive = 1`,
+		pageID, source).Scan(&payload)
+	if errors.Is(err, sql.ErrNoRows) || !payload.Valid || strings.TrimSpace(payload.String) == "" {
+		return Page{}, false, nil
+	}
+	if err != nil {
+		return Page{}, false, err
+	}
+	var page Page
+	if err := json.Unmarshal([]byte(payload.String), &page); err != nil {
+		return Page{}, false, err
+	}
+	return page, true, nil
 }
 
 func (s *Store) NextSourceSyncAt(ctx context.Context, recordTable, source string) (int64, error) {
@@ -1357,12 +1426,17 @@ func (s *Store) refreshPageFTS(ctx context.Context, pageID string) error {
 	if err != nil {
 		return err
 	}
-	parts := pageBlockTextParts(pageID, blocks)
+	apiBlocksSynced, err := s.HasSyncState(ctx, SourceAPI, "page_blocks", pageID)
+	if err != nil {
+		return err
+	}
+	parts := pageBlockTextParts(pageID, blocks, apiBlocksSynced)
 	_, err = s.execContext(ctx, `insert into page_fts(page_id, title, body) values (?, ?, ?)`, pageID, title, strings.Join(parts, "\n"))
 	return err
 }
 
-func pageBlockTextParts(pageID string, blocks []Block) []string {
+func pageBlockTextParts(pageID string, blocks []Block, apiBlocksSynced bool) []string {
+	blocks = preferredPageContentBlocks(blocks, apiBlocksSynced)
 	children := map[string][]Block{}
 	for _, block := range blocks {
 		if block.ID == pageID {
@@ -1396,6 +1470,35 @@ func pageBlockTextParts(pageID string, blocks []Block) []string {
 		}
 	}
 	return parts
+}
+
+func preferredPageContentBlocks(blocks []Block, apiBlocksSynced bool) []Block {
+	hasNotionMCP := false
+	for _, block := range blocks {
+		if block.Type == BlockTypeNotionMCPMarkdown {
+			hasNotionMCP = true
+			break
+		}
+	}
+	if !hasNotionMCP {
+		return blocks
+	}
+	if apiBlocksSynced {
+		out := make([]Block, 0, len(blocks))
+		for _, candidate := range blocks {
+			if candidate.Type != BlockTypeNotionMCPMarkdown {
+				out = append(out, candidate)
+			}
+		}
+		return out
+	}
+	var out []Block
+	for _, block := range blocks {
+		if block.Type == BlockTypeNotionMCPMarkdown {
+			out = append(out, block)
+		}
+	}
+	return out
 }
 
 func sortBlockSiblings(blocks []Block) {

@@ -12,6 +12,13 @@ token_env = "NOTION_TOKEN"
 base_url = "https://api.notion.com/v1"
 version = "2026-03-11"
 
+[notion.mcp]
+enabled = false
+base_url = "https://chatgpt.com/backend-api/wham/apps"
+auth_path = "~/.codex/auth.json"
+connector_id = "asdk_app_69c18c28f1188191bf5b8445c4ab0a2e"
+max_pages = 100
+
 [share]
 remote = ""
 branch = "main"

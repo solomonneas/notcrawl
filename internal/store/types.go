@@ -1,5 +1,12 @@
 package store
 
+const (
+	SourceDesktop              = "desktop"
+	SourceAPI                  = "api"
+	SourceNotionMCP            = "notion-mcp"
+	BlockTypeNotionMCPMarkdown = "notion_mcp_markdown"
+)
+
 type Space struct {
 	ID       string
 	Name     string

@@ -6,10 +6,11 @@
 Markdown so you can search, query, diff, and share your Notion memory without
 depending on the Notion UI.
 
-It has two ingestion paths:
+It has three ingestion paths:
 
 - `desktop`: read-only snapshots of the local Notion desktop cache
 - `api`: official Notion API sync with rate-limit aware crawling
+- `notion-mcp`: targeted repair through a preconfigured Codex Notion connector
 
 SQLite is the canonical archive. Markdown is the durable human/agent surface.
 Git share mode publishes normalized snapshots that other machines can subscribe
@@ -74,6 +75,21 @@ notcrawl export-db --database DATABASE_ID --format csv --output roadmap.csv
 notcrawl export-db --all --dir exports/csv
 ```
 
+Or repair incomplete Desktop pages through the Notion app connected in Codex:
+
+```bash
+notcrawl sync --source notion-mcp
+notcrawl sync --source notion-mcp --page PAGE_ID
+notcrawl sync --source notion-mcp --query "launch plan" --limit 25
+```
+
+Without `--page` or `--query`, this source fetches known Desktop pages that
+have no cached body or missing referenced blocks, plus API pages whose block
+sync did not complete. It does not claim to enumerate the entire workspace.
+The transport reuses Codex authentication and the configured Notion app through
+the experimental ChatGPT apps gateway. Empty connector bodies leave existing
+archive content unchanged and remain eligible for a later retry.
+
 Default paths:
 
 - config: `~/.notcrawl/config.toml`
@@ -91,7 +107,7 @@ Default paths:
   control/status payloads for launchers, automation, and CI
 - `report` summarizes recent page, database, space, and comment activity
 - `maintain` rebuilds FTS, optimizes SQLite indexes, and can run `VACUUM`
-- `sync` ingests from `desktop`, `api`, or `all`
+- `sync` ingests from `desktop`, `api`, `notion-mcp`, or `all`
 - `export-md` renders normalized Markdown files from SQLite
 - `databases` lists crawled Notion databases
 - `export-db` exports one crawled Notion database, or all databases with `--all --dir`, to CSV or TSV
@@ -134,5 +150,12 @@ is not a deletion signal; explicit Notion tombstones still retire records.
 
 API mode uses the official Notion API. It stores raw API payloads alongside
 normalized rows so renderers can improve without recrawling.
+
+Notion MCP mode is read-only and targeted. It reads the Codex bearer credential
+at request time, never stores it, dynamically resolves only the connected
+Notion search/fetch tools, and strips signed URL credentials before persisting
+connector Markdown, including page properties. Credentials are sent only to the
+exact HTTPS ChatGPT apps gateway. The gateway and Codex auth-file format are
+experimental contracts and may change.
 
 Secrets are never exported into Markdown or git-share snapshots.

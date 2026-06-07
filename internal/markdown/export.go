@@ -92,11 +92,15 @@ func (e Exporter) writePage(ctx context.Context, paths pathResolver, page store.
 	if err != nil {
 		return "", store.BlockCoverage{}, err
 	}
+	mcpContentSynced, err := e.Store.HasSyncState(ctx, store.SourceNotionMCP, "page_content", page.ID)
+	if err != nil {
+		return "", store.BlockCoverage{}, err
+	}
 	desktopBacked, err := e.Store.RecordHasLiveSource(ctx, "page", page.ID, "desktop")
 	if err != nil {
 		return "", store.BlockCoverage{}, err
 	}
-	if desktopBacked && !apiBlocksSynced {
+	if desktopBacked && !apiBlocksSynced && !mcpContentSynced {
 		coverage, err = e.Store.PageBlockCoverage(ctx, page.ID)
 		if err != nil {
 			return "", store.BlockCoverage{}, err
@@ -126,7 +130,7 @@ func (e Exporter) writePage(ctx context.Context, paths pathResolver, page store.
 	writeCoverageWarning(&b, coverage)
 	wroteProperties := writeProperties(&b, paths, page)
 	beforeBlocks := b.Len()
-	renderBlocks(&b, page.ID, blocks)
+	renderBlocks(&b, page.ID, renderableBlocks(blocks, apiBlocksSynced))
 	wroteBlocks := b.Len() > beforeBlocks
 	if shouldWriteEmptyDesktopNotice(page, comments, wroteProperties, wroteBlocks) {
 		b.WriteString("> [!NOTE]\n> No body blocks or non-title properties were present in the Desktop cache. The page may be empty or its body may not have been cached.\n\n")
@@ -430,6 +434,35 @@ func renderBlocks(b *strings.Builder, pageID string, blocks []store.Block) {
 	}
 }
 
+func renderableBlocks(blocks []store.Block, apiBlocksSynced bool) []store.Block {
+	hasNotionMCP := false
+	for _, block := range blocks {
+		if block.Type == store.BlockTypeNotionMCPMarkdown {
+			hasNotionMCP = true
+			break
+		}
+	}
+	if !hasNotionMCP {
+		return blocks
+	}
+	if apiBlocksSynced {
+		out := make([]store.Block, 0, len(blocks))
+		for _, block := range blocks {
+			if block.Type != store.BlockTypeNotionMCPMarkdown {
+				out = append(out, block)
+			}
+		}
+		return out
+	}
+	var out []store.Block
+	for _, block := range blocks {
+		if block.Type == store.BlockTypeNotionMCPMarkdown {
+			out = append(out, block)
+		}
+	}
+	return out
+}
+
 func renderChildren(b *strings.Builder, parentID string, children map[string][]store.Block, depth int) {
 	for _, block := range children[parentID] {
 		renderBlock(b, block, depth)
@@ -441,6 +474,12 @@ func renderBlock(b *strings.Builder, block store.Block, depth int) {
 	text := notiontext.MarkdownEscape(block.Text)
 	indent := strings.Repeat("  ", depth)
 	switch block.Type {
+	case store.BlockTypeNotionMCPMarkdown:
+		text = strings.Trim(block.Text, "\r\n")
+		if text != "" {
+			b.WriteString(text)
+			b.WriteString("\n\n")
+		}
 	case "header", "heading_1":
 		writeLine(b, "# "+text)
 	case "sub_header", "heading_2":

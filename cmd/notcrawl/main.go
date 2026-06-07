@@ -22,6 +22,7 @@ import (
 	"github.com/openclaw/notcrawl/internal/markdown"
 	"github.com/openclaw/notcrawl/internal/notionapi"
 	"github.com/openclaw/notcrawl/internal/notiondesktop"
+	"github.com/openclaw/notcrawl/internal/notionmcp"
 	"github.com/openclaw/notcrawl/internal/notiontext"
 	"github.com/openclaw/notcrawl/internal/report"
 	"github.com/openclaw/notcrawl/internal/share"
@@ -211,6 +212,10 @@ func runDoctor(ctx context.Context, stdout io.Writer, cfg config.Config, args []
 		"desktop_size":      desktop.SizeBytes,
 		"api_token_env":     cfg.Notion.API.TokenEnv,
 		"api_token_present": cfg.APIToken() != "",
+		"mcp_enabled":       cfg.Notion.MCP.Enabled,
+		"mcp_auth_path":     cfg.Notion.MCP.AuthPath,
+		"mcp_auth_present":  fileExists(cfg.Notion.MCP.AuthPath),
+		"mcp_connector_id":  cfg.Notion.MCP.ConnectorID,
 	}
 	status := store.Status{DBPath: cfg.DBPath}
 	st, err := store.OpenReadOnly(cfg.DBPath)
@@ -354,6 +359,11 @@ func desktopCacheDatabases(cacheDir string) []control.Database {
 	return out
 }
 
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
 func runReport(ctx context.Context, stdout io.Writer, cfg config.Config) error {
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
@@ -397,9 +407,19 @@ func runMaintain(ctx context.Context, stdout io.Writer, cfg config.Config, args 
 
 func runSync(ctx context.Context, stdout, stderr io.Writer, cfg config.Config, args []string) (err error) {
 	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
-	source := fs.String("source", "all", "source: desktop, api, all")
+	source := fs.String("source", "all", "source: desktop, api, notion-mcp, all")
+	limit := fs.Int("limit", cfg.Notion.MCP.MaxPages, "maximum Notion MCP pages to fetch; 0 means unlimited")
+	var pageIDs, queries stringListFlag
+	fs.Var(&pageIDs, "page", "Notion page ID or URL to fetch; repeatable")
+	fs.Var(&queries, "query", "targeted Notion workspace query; repeatable, maximum 25 results each")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if fs.NArg() != 0 {
+		return fmt.Errorf("sync takes flags only")
+	}
+	if *source != "notion-mcp" && (len(pageIDs) > 0 || len(queries) > 0 || *limit != cfg.Notion.MCP.MaxPages) {
+		return fmt.Errorf("--page, --query, and --limit apply only to --source notion-mcp")
 	}
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
@@ -440,6 +460,15 @@ func runSync(ctx context.Context, stdout, stderr io.Writer, cfg config.Config, a
 		tracker.Set(completed, "phase", "api", "pages", s.Pages, "databases", s.Databases, "blocks", s.Blocks)
 		writeAPIWarnings(stderr, s)
 		fmt.Fprintf(stdout, "api: users=%d pages=%d databases=%d database_rows=%d blocks=%d comments=%d\n", s.Users, s.Pages, s.Databases, s.DatabaseRows, s.Blocks, s.Comments)
+	case "notion-mcp":
+		s, err := syncNotionMCP(ctx, st, cfg, notionmcp.SyncOptions{PageIDs: pageIDs, Queries: queries, Limit: *limit})
+		if err != nil {
+			return err
+		}
+		completed++
+		tracker.Set(completed, "phase", "notion-mcp", "candidates", s.Candidates, "pages", s.Pages, "failed", s.Failed)
+		writeNotionMCPWarnings(stderr, s)
+		fmt.Fprintf(stdout, "notion-mcp: candidates=%d pages=%d empty=%d failed=%d\n", s.Candidates, s.Pages, s.EmptyPages, s.Failed)
 	case "all":
 		if cfg.Notion.Desktop.Enabled {
 			s, err := notiondesktop.Ingest(ctx, st, cfg.Notion.Desktop.Path, cfg.CacheDir)
@@ -464,10 +493,40 @@ func runSync(ctx context.Context, stdout, stderr io.Writer, cfg config.Config, a
 			writeAPIWarnings(stderr, s)
 			fmt.Fprintf(stdout, "api: users=%d pages=%d databases=%d database_rows=%d blocks=%d comments=%d\n", s.Users, s.Pages, s.Databases, s.DatabaseRows, s.Blocks, s.Comments)
 		}
+		if cfg.Notion.MCP.Enabled {
+			s, err := syncNotionMCP(ctx, st, cfg, notionmcp.SyncOptions{Limit: cfg.Notion.MCP.MaxPages})
+			if err != nil {
+				return err
+			}
+			completed++
+			tracker.Set(completed, "phase", "notion-mcp", "candidates", s.Candidates, "pages", s.Pages, "failed", s.Failed)
+			writeNotionMCPWarnings(stderr, s)
+			fmt.Fprintf(stdout, "notion-mcp: candidates=%d pages=%d empty=%d failed=%d\n", s.Candidates, s.Pages, s.EmptyPages, s.Failed)
+		}
 	default:
 		return fmt.Errorf("unknown source %q", *source)
 	}
 	return nil
+}
+
+var newNotionMCPClient = func(cfg config.Config) notionmcp.Client {
+	return notionmcp.Client{
+		BaseURL:     cfg.Notion.MCP.BaseURL,
+		AuthPath:    cfg.Notion.MCP.AuthPath,
+		ConnectorID: cfg.Notion.MCP.ConnectorID,
+	}
+}
+
+func syncNotionMCP(ctx context.Context, st *store.Store, cfg config.Config, opts notionmcp.SyncOptions) (notionmcp.Summary, error) {
+	return newNotionMCPClient(cfg).Sync(ctx, st, opts)
+}
+
+func writeNotionMCPWarnings(w io.Writer, s notionmcp.Summary) {
+	for _, warning := range s.Warnings {
+		if strings.TrimSpace(warning) != "" {
+			fmt.Fprintf(w, "warning: %s\n", warning)
+		}
+	}
 }
 
 func writeAPIWarnings(w io.Writer, s notionapi.Summary) {
@@ -495,7 +554,7 @@ func progressLogger(w io.Writer) *slog.Logger {
 
 func syncStageTotal(source string, cfg config.Config) int {
 	switch source {
-	case "desktop", "api":
+	case "desktop", "api", "notion-mcp":
 		return 1
 	case "all":
 		total := 0
@@ -505,10 +564,24 @@ func syncStageTotal(source string, cfg config.Config) int {
 		if cfg.Notion.API.Enabled && cfg.APIToken() != "" {
 			total++
 		}
+		if cfg.Notion.MCP.Enabled {
+			total++
+		}
 		return total
 	default:
 		return 0
 	}
+}
+
+type stringListFlag []string
+
+func (f *stringListFlag) String() string {
+	return strings.Join(*f, ",")
+}
+
+func (f *stringListFlag) Set(value string) error {
+	*f = append(*f, value)
+	return nil
 }
 
 func runExportMarkdown(ctx context.Context, stdout io.Writer, cfg config.Config) error {
@@ -955,6 +1028,19 @@ func blockPreviewLines(blocks []store.Block, maxLines int) []string {
 	}
 	lines := make([]string, 0, maxLines)
 	for _, block := range blocks {
+		if block.Type == store.BlockTypeNotionMCPMarkdown {
+			for _, line := range strings.Split(strings.Trim(block.Text, "\r\n"), "\n") {
+				line = strings.TrimRight(line, " ")
+				if line == "" && (len(lines) == 0 || lines[len(lines)-1] == "") {
+					continue
+				}
+				lines = append(lines, line)
+				if len(lines) >= maxLines {
+					return lines
+				}
+			}
+			continue
+		}
 		text := compactPreviewNoise(notiontext.CleanLegacyArtifacts(block.Text))
 		if text == "" {
 			continue
@@ -1386,6 +1472,7 @@ Commands:
   maintain [--vacuum]       Rebuild FTS and optimize SQLite indexes
   sync --source desktop     Ingest Notion Desktop cache
   sync --source api         Ingest through the official Notion API
+  sync --source notion-mcp  Repair known pages through the Codex Notion connector
   sync --source all         Run enabled sources
   tap                       Legacy-friendly alias for sync --source desktop
   export-md                 Render normalized Markdown from SQLite

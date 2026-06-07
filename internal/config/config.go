@@ -12,9 +12,13 @@ import (
 )
 
 const (
-	defaultDirName     = ".notcrawl"
-	defaultDesktopPath = "~/Library/Application Support/Notion/notion.db"
-	defaultAPIVersion  = "2026-03-11"
+	defaultDirName        = ".notcrawl"
+	defaultDesktopPath    = "~/Library/Application Support/Notion/notion.db"
+	defaultAPIVersion     = "2026-03-11"
+	defaultMCPBaseURL     = "https://chatgpt.com/backend-api/wham/apps"
+	defaultMCPAuthPath    = "~/.codex/auth.json"
+	defaultMCPConnectorID = "asdk_app_69c18c28f1188191bf5b8445c4ab0a2e"
+	defaultMCPMaxPages    = 100
 )
 
 type Config struct {
@@ -28,6 +32,7 @@ type Config struct {
 type NotionConfig struct {
 	Desktop DesktopConfig `toml:"desktop"`
 	API     APIConfig     `toml:"api"`
+	MCP     MCPConfig     `toml:"mcp"`
 }
 
 type DesktopConfig struct {
@@ -40,6 +45,14 @@ type APIConfig struct {
 	TokenEnv string `toml:"token_env"`
 	BaseURL  string `toml:"base_url"`
 	Version  string `toml:"version"`
+}
+
+type MCPConfig struct {
+	Enabled     bool   `toml:"enabled"`
+	BaseURL     string `toml:"base_url"`
+	AuthPath    string `toml:"auth_path"`
+	ConnectorID string `toml:"connector_id"`
+	MaxPages    int    `toml:"max_pages"`
 }
 
 type ShareConfig struct {
@@ -72,6 +85,13 @@ func Default() Config {
 				TokenEnv: "NOTION_TOKEN",
 				BaseURL:  "https://api.notion.com/v1",
 				Version:  defaultAPIVersion,
+			},
+			MCP: MCPConfig{
+				Enabled:     false,
+				BaseURL:     defaultMCPBaseURL,
+				AuthPath:    defaultMCPAuthPath,
+				ConnectorID: defaultMCPConnectorID,
+				MaxPages:    defaultMCPMaxPages,
 			},
 		},
 		Share: ShareConfig{
@@ -152,6 +172,18 @@ func (c *Config) Resolve() error {
 	if strings.TrimSpace(c.Notion.API.Version) == "" {
 		c.Notion.API.Version = defaultAPIVersion
 	}
+	if strings.TrimSpace(c.Notion.MCP.BaseURL) == "" {
+		c.Notion.MCP.BaseURL = defaultMCPBaseURL
+	}
+	if strings.TrimSpace(c.Notion.MCP.AuthPath) == "" {
+		c.Notion.MCP.AuthPath = defaultMCPAuthPath
+	}
+	if strings.TrimSpace(c.Notion.MCP.ConnectorID) == "" {
+		c.Notion.MCP.ConnectorID = defaultMCPConnectorID
+	}
+	if c.Notion.MCP.MaxPages <= 0 {
+		c.Notion.MCP.MaxPages = defaultMCPMaxPages
+	}
 	if strings.TrimSpace(c.Share.Branch) == "" {
 		c.Share.Branch = "main"
 	}
@@ -161,7 +193,7 @@ func (c *Config) Resolve() error {
 	if _, err := time.ParseDuration(c.Share.StaleAfter); err != nil {
 		return fmt.Errorf("invalid share stale_after: %w", err)
 	}
-	paths := []*string{&c.DBPath, &c.CacheDir, &c.MarkdownDir, &c.Notion.Desktop.Path, &c.Share.RepoPath}
+	paths := []*string{&c.DBPath, &c.CacheDir, &c.MarkdownDir, &c.Notion.Desktop.Path, &c.Notion.MCP.AuthPath, &c.Share.RepoPath}
 	for _, p := range paths {
 		expanded, err := ExpandPath(*p)
 		if err != nil {

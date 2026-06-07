@@ -21,6 +21,7 @@ V1 scope:
 - macOS Notion Desktop cache discovery
 - read-only desktop snapshot ingestion
 - official Notion API sync
+- targeted repair through a preconfigured Codex Notion MCP app
 - pages and blocks
 - databases/data sources as collections, including current data-source API endpoints
 - database rows as pages linked to their collection
@@ -75,6 +76,22 @@ API sync uses `NOTION_TOKEN` by default. It must:
 
 New configs should use the current Notion API version. Existing configs pinned
 to legacy `2022-06-28` must continue using deprecated database query endpoints.
+
+### Notion MCP Source
+
+Notion MCP sync uses the Notion app already connected in Codex through the
+ChatGPT apps gateway. It must:
+
+1. read Codex auth at request time without persisting or logging the bearer token
+2. dynamically resolve read-only Notion `search` and `fetch` tools
+3. fetch explicit page IDs/URLs or bounded targeted search results
+4. automatically repair incomplete known Desktop pages and API pages whose block sync did not complete
+5. preserve connector enhanced Markdown, including properties, without lossy block reconstruction
+6. strip signed URL credentials before storing or exporting content
+7. avoid claiming complete workspace enumeration or incremental coverage
+
+The Codex gateway transport is experimental and OpenAI-specific. Official API
+sync remains the stable integration path.
 
 ## SQLite Archive
 

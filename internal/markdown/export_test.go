@@ -126,6 +126,82 @@ func TestExporterMarksMissingDesktopBlocks(t *testing.T) {
 	}
 }
 
+func TestExporterUsesNotionMCPMarkdownToRepairDesktopPage(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "notcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := store.NowMS()
+	if err := st.UpsertPage(ctx, store.Page{ID: "page1", Title: "Partial", Alive: true, Source: store.SourceDesktop, SyncedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range []store.Block{
+		{ID: "page1", PageID: "page1", Type: "page", ContentJSON: `["desktop","missing"]`, Alive: true, Source: store.SourceDesktop, SyncedAt: now},
+		{ID: "desktop", PageID: "page1", ParentID: "page1", Type: "paragraph", Text: "stale desktop body", Alive: true, Source: store.SourceDesktop, SyncedAt: now},
+		{ID: "mcp", PageID: "page1", ParentID: "page1", Type: store.BlockTypeNotionMCPMarkdown, Text: "## Full body\n\n- repaired", Alive: true, Source: store.SourceNotionMCP, SyncedAt: now + 1},
+	} {
+		if err := st.UpsertBlock(ctx, block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SetSyncState(ctx, store.SourceNotionMCP, "page_content", "page1", "1"); err != nil {
+		t.Fatal(err)
+	}
+	s, err := (Exporter{Store: st, Dir: t.TempDir()}).Export(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.IncompletePages != 0 {
+		t.Fatalf("connector-repaired page marked incomplete: %+v", s)
+	}
+	raw, err := os.ReadFile(s.Files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "## Full body\n\n- repaired") || strings.Contains(text, "stale desktop body") || strings.Contains(text, "[!WARNING]") {
+		t.Fatalf("unexpected repaired Markdown:\n%s", text)
+	}
+}
+
+func TestExporterPrefersAPIBlocksOverNotionMCPMarkdown(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "notcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := store.NowMS()
+	if err := st.UpsertPage(ctx, store.Page{ID: "page1", Title: "Page", Alive: true, Source: store.SourceAPI, SyncedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	for _, block := range []store.Block{
+		{ID: "mcp", PageID: "page1", ParentID: "page1", Type: store.BlockTypeNotionMCPMarkdown, Text: "connector body", Alive: true, Source: store.SourceNotionMCP, SyncedAt: now},
+		{ID: "api", PageID: "page1", ParentID: "page1", Type: "paragraph", Text: "official API body", Alive: true, Source: store.SourceAPI, SyncedAt: now + 1},
+	} {
+		if err := st.UpsertBlock(ctx, block); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := st.SetSyncState(ctx, store.SourceAPI, "page_blocks", "page1", ""); err != nil {
+		t.Fatal(err)
+	}
+	s, err := (Exporter{Store: st, Dir: t.TempDir()}).Export(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(s.Files[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "official API body") || strings.Contains(text, "connector body") {
+		t.Fatalf("unexpected API-preferred Markdown:\n%s", text)
+	}
+}
+
 func TestExporterDoesNotMarkCompleteCachedBlocksIncomplete(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(filepath.Join(t.TempDir(), "notcrawl.db"))

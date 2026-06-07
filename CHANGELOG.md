@@ -2,6 +2,7 @@
 
 ## 0.5.0 - Unreleased
 
+- Add targeted `notion-mcp` sync through a preconfigured Codex Notion app to repair incomplete Desktop/API pages and fetch explicit page IDs or bounded search results.
 - Mark incomplete Desktop-cache Markdown pages with missing-block metadata and warnings instead of silently exporting title-only files.
 - Render page and database-row properties in Markdown exports with collection schema labels when available.
 - Preserve previously cached Desktop pages and blocks across opportunistic cache eviction while honoring explicit tombstones.

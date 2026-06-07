@@ -77,6 +77,94 @@ func TestStoreRestoresDesktopPayloadWhenAPISourceRetires(t *testing.T) {
 	}
 }
 
+func TestStoreOrdersAPIThenNotionMCPThenDesktop(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(filepath.Join(t.TempDir(), "notcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := NowMS()
+	for i, page := range []Page{
+		{ID: "page1", Title: "Desktop", Alive: true, Source: SourceDesktop, SyncedAt: now},
+		{ID: "page1", Title: "MCP", Alive: true, Source: SourceNotionMCP, SyncedAt: now + 1},
+		{ID: "page1", Title: "Newer desktop", Alive: true, Source: SourceDesktop, SyncedAt: now + 2},
+		{ID: "page1", Title: "API", Alive: true, Source: SourceAPI, SyncedAt: now + 3},
+	} {
+		if err := st.UpsertPage(ctx, page); err != nil {
+			t.Fatalf("upsert %d: %v", i, err)
+		}
+	}
+	pages, err := st.Pages(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) != 1 || pages[0].Title != "API" || pages[0].Source != SourceAPI {
+		t.Fatalf("API did not win: %#v", pages)
+	}
+	if err := st.UpsertPage(ctx, Page{ID: "page1", Title: "Archived API", Alive: false, Source: SourceAPI, SyncedAt: now + 4}); err != nil {
+		t.Fatal(err)
+	}
+	pages, err = st.Pages(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) != 1 || pages[0].Title != "MCP" || pages[0].Source != SourceNotionMCP {
+		t.Fatalf("MCP fallback did not win: %#v", pages)
+	}
+}
+
+func TestStoreFTSPrefersNotionMCPMarkdownOverDesktopBlocks(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(filepath.Join(t.TempDir(), "notcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := NowMS()
+	if err := st.UpsertPage(ctx, Page{ID: "page1", Title: "Page", Alive: true, Source: SourceDesktop, SyncedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertBlock(ctx, Block{ID: "desktop", PageID: "page1", ParentID: "page1", Type: "paragraph", Text: "staledesktopword", Alive: true, Source: SourceDesktop, SyncedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertBlock(ctx, Block{ID: "mcp", PageID: "page1", ParentID: "page1", Type: BlockTypeNotionMCPMarkdown, Text: "freshconnectorword", Alive: true, Source: SourceNotionMCP, SyncedAt: now + 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertBlock(ctx, Block{ID: "partial-api", PageID: "page1", ParentID: "page1", Type: "paragraph", Text: "partialapiword", Alive: true, Source: SourceAPI, SyncedAt: now + 2}); err != nil {
+		t.Fatal(err)
+	}
+	oldResults, err := st.Search(ctx, "staledesktopword", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newResults, err := st.Search(ctx, "freshconnectorword", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	partialResults, err := st.Search(ctx, "partialapiword", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(oldResults) != 0 || len(newResults) != 1 || newResults[0].ID != "page1" || len(partialResults) != 0 {
+		t.Fatalf("partial API sync displaced MCP content: old=%#v new=%#v partial=%#v", oldResults, newResults, partialResults)
+	}
+	if err := st.SetSyncState(ctx, SourceAPI, "page_blocks", "page1", "complete"); err != nil {
+		t.Fatal(err)
+	}
+	newResults, err = st.Search(ctx, "freshconnectorword", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	partialResults, err = st.Search(ctx, "partialapiword", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(newResults) != 0 || len(partialResults) != 1 || partialResults[0].ID != "page1" {
+		t.Fatalf("completed API sync did not displace MCP content: new=%#v partial=%#v", newResults, partialResults)
+	}
+}
+
 func TestStoreKeepsStructureWhenNewerFallbackPayloadIsOrphaned(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(filepath.Join(t.TempDir(), "notcrawl.db"))
