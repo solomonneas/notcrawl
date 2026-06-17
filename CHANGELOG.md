@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.5.1 - Unreleased
+
 ## 0.5.0 - 2026-06-17
 
 - Add targeted `notion-mcp` sync through a preconfigured Codex Notion app to repair incomplete Desktop/API pages and fetch explicit page IDs or bounded search results.
