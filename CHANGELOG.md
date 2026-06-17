@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.0 - Unreleased
+## 0.5.0 - 2026-06-17
 
 - Add targeted `notion-mcp` sync through a preconfigured Codex Notion app to repair incomplete Desktop/API pages and fetch explicit page IDs or bounded search results.
 - Mark incomplete Desktop-cache Markdown pages with missing-block metadata and warnings instead of silently exporting title-only files.
@@ -8,7 +8,7 @@
 - Preserve previously cached Desktop pages and blocks across opportunistic cache eviction while honoring explicit tombstones.
 - Track API and Desktop provenance independently so archived API records restore live Desktop page, block, and comment payloads.
 - Preserve source provenance in git-share snapshots and validate complete manifests before replacing a local archive.
-- Update `crawlkit` to v0.11.0.
+- Update `crawlkit` to v0.12.1.
 - API sync now tolerates Notion `restricted_resource` failures from `/users`, continues page/database discovery without user labels, and warns when API discovery returns no pages, databases, blocks, or comments. Thanks @elijahmuraoka.
 - API sync now skips fetching copied synced-block children that Notion reports as `object_not_found`, while still storing the synced-block copy. Thanks @elijahmuraoka.
 - Support Notion Desktop defaults and stale-directory pruning on Windows. Thanks @MrJngomonkey.
