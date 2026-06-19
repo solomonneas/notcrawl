@@ -3,6 +3,7 @@
 ## 0.5.1 - Unreleased
 
 - Retry transient Cloudflare 524 timeouts from Notion API requests. Thanks @davelutztx.
+- Update `golang.org/x/sys` to v0.46.0, resolving a Windows integer-overflow advisory in the dependency graph.
 
 ## 0.5.0 - 2026-06-17
 
