@@ -24,7 +24,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -41,7 +41,7 @@ jobs:
           git diff --exit-code -- go.mod go.sum
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.3.0
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.4.0
 
       - name: Run govulncheck
         run: '"$(go env GOPATH)/bin/govulncheck" ./...'
@@ -51,7 +51,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -71,7 +71,7 @@ jobs:
         run: go vet ./...
 
       - name: Install deadcode
-        run: go install golang.org/x/tools/cmd/deadcode@v0.45.0
+        run: go install golang.org/x/tools/cmd/deadcode@v0.46.0
 
       - name: Deadcode
         run: |
@@ -87,7 +87,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -122,7 +122,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -141,7 +141,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -152,7 +152,7 @@ jobs:
           cache: true
 
       - name: Snapshot release build
-        uses: goreleaser/goreleaser-action@v7.2.1
+        uses: goreleaser/goreleaser-action@v7.2.2
         with:
           distribution: goreleaser
           version: "~> v2"
