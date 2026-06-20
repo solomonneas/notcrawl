@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.5.1 - Unreleased
+## 0.5.1 - 2026-06-19
 
 - Retry concurrent Git snapshot branch-and-tag pushes after rebasing and retargeting the unpublished tag.
 - Retry transient Cloudflare 524 timeouts from Notion API requests. Thanks @davelutztx.
