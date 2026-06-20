@@ -1,5 +1,7 @@
 # Changelog
 
+## 0.5.2 - Unreleased
+
 ## 0.5.1 - 2026-06-19
 
 - Retry concurrent Git snapshot branch-and-tag pushes after rebasing and retargeting the unpublished tag.
