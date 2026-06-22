@@ -649,7 +649,11 @@ func TestExporterPrunesStaleMarkdown(t *testing.T) {
 		t.Fatal(err)
 	}
 	staleMarkdown := filepath.Join(staleDir, "stale.md")
-	if err := os.WriteFile(staleMarkdown, []byte("old"), 0o644); err != nil {
+	if err := os.WriteFile(staleMarkdown, []byte("---\ngenerated_by: \"notcrawl\"\n---\n\nold"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	unrelatedMarkdown := filepath.Join(staleDir, "keep.md")
+	if err := os.WriteFile(unrelatedMarkdown, []byte("user notes"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	keepNote := filepath.Join(staleDir, "note.txt")
@@ -662,6 +666,9 @@ func TestExporterPrunesStaleMarkdown(t *testing.T) {
 	}
 	if _, err := os.Stat(staleMarkdown); !os.IsNotExist(err) {
 		t.Fatalf("expected stale markdown to be removed, stat err=%v", err)
+	}
+	if _, err := os.Stat(unrelatedMarkdown); err != nil {
+		t.Fatalf("expected unrelated markdown file to remain: %v", err)
 	}
 	if _, err := os.Stat(keepNote); err != nil {
 		t.Fatalf("expected non-markdown file to remain: %v", err)

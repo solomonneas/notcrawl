@@ -22,20 +22,10 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout workflow ref
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          ref: ${{ inputs.tag_name || github.ref }}
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Run tests
-        run: go test ./...
 
       - name: Resolve release metadata
         env:
@@ -49,6 +39,21 @@ jobs:
           echo "RELEASE_TAG=${TAG}" >> "$GITHUB_ENV"
           echo "RELEASE_VERSION=${TAG#v}" >> "$GITHUB_ENV"
 
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: refs/tags/${{ env.RELEASE_TAG }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run tests
+        run: go test ./...
+
       - name: Build release artifacts
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -59,7 +64,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish release from Release Drafter
-        uses: release-drafter/release-drafter@v7
+        uses: release-drafter/release-drafter@af23998d8b06daff2beb4e55195698d0df971769
         with:
           publish: true
           tag: ${{ env.RELEASE_TAG }}
@@ -104,7 +109,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --upgrade pip
-          python3 -m pip install cloudsmith-cli
+          python3 -m pip install cloudsmith-cli==1.11.1
 
       - name: Publish APT packages to Cloudsmith
         if: ${{ env.CLOUDSMITH_ENABLED == '1' }}

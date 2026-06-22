@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -574,7 +575,7 @@ func TestExportDatabaseAllWritesFilesAndIndex(t *testing.T) {
 	now := store.NowMS()
 	for _, collection := range []store.Collection{
 		{ID: "db1", Name: "Roadmap", Source: "test", SyncedAt: now, SchemaJSON: `{"Name":{"type":"title"}}`},
-		{ID: "db2", Name: "Launch 🚀 Plan ✅", Source: "test", SyncedAt: now, SchemaJSON: `{"Task":{"type":"title"}}`},
+		{ID: "db2", Name: "Launch 🚀 Plan ✅\tQ3\nReview", Source: "test", SyncedAt: now, SchemaJSON: `{"Task":{"type":"title"}}`},
 	} {
 		if err := st.UpsertCollection(ctx, collection); err != nil {
 			t.Fatal(err)
@@ -599,18 +600,59 @@ func TestExportDatabaseAllWritesFilesAndIndex(t *testing.T) {
 	if got := stdout.String(); !strings.Contains(got, "exported 2 databases and 1 rows") {
 		t.Fatalf("unexpected stdout: %s", got)
 	}
-	for _, name := range []string{"roadmap-db1.csv", "launch-plan-db2.csv", "index.tsv"} {
+	for _, name := range []string{"roadmap-db1.csv", "launch-plan-q3-review-db2.csv", "index.tsv"} {
 		if _, err := os.Stat(filepath.Join(outDir, name)); err != nil {
 			t.Fatalf("missing %s: %v", name, err)
 		}
 	}
-	index, err := os.ReadFile(filepath.Join(outDir, "index.tsv"))
+	indexFile, err := os.Open(filepath.Join(outDir, "index.tsv"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"id\tname\tsource\trows\tcolumns\tfile", "db1\tRoadmap\ttest\t1\t4\troadmap-db1.csv"} {
-		if !strings.Contains(string(index), want) {
-			t.Fatalf("index missing %q:\n%s", want, index)
-		}
+	defer indexFile.Close()
+	indexReader := csv.NewReader(indexFile)
+	indexReader.Comma = '\t'
+	records, err := indexReader.ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 3 {
+		t.Fatalf("expected header plus two database rows, got %#v", records)
+	}
+	if got := strings.Join(records[0], "\t"); got != "id\tname\tsource\trows\tcolumns\tfile" {
+		t.Fatalf("unexpected index header: %#v", records[0])
+	}
+	rowsByID := map[string][]string{}
+	for _, record := range records[1:] {
+		rowsByID[record[0]] = record
+	}
+	if row := rowsByID["db1"]; row[1] != "Roadmap" || row[5] != "roadmap-db1.csv" {
+		t.Fatalf("unexpected db1 index row: %#v", row)
+	}
+	if row := rowsByID["db2"]; row[1] != "Launch 🚀 Plan ✅\tQ3\nReview" || row[5] != "launch-plan-q3-review-db2.csv" {
+		t.Fatalf("escaped collection name did not round-trip: %#v", row)
+	}
+}
+
+func TestExportDatabaseInvalidFormatDoesNotTruncateOutput(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "notcrawl.db")
+	outputPath := filepath.Join(dir, "existing.csv")
+	original := []byte("existing export")
+	if err := os.WriteFile(outputPath, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stdout, stderr bytes.Buffer
+	err := run(ctx, []string{"--config", filepath.Join(dir, "missing.toml"), "--db", dbPath, "export-db", "--database", "db1", "--format", "json", "--output", outputPath}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "unsupported format") {
+		t.Fatalf("expected unsupported format error, got %v", err)
+	}
+	got, err := os.ReadFile(outputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, original) {
+		t.Fatalf("invalid export truncated output: %q", string(got))
 	}
 }

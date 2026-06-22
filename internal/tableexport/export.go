@@ -48,6 +48,9 @@ func (e Exporter) Export(ctx context.Context, databaseID string, format Format, 
 	if databaseID == "" {
 		return Summary{}, fmt.Errorf("database id is required")
 	}
+	if err := ValidateFormat(format); err != nil {
+		return Summary{}, err
+	}
 	collection, err := e.Store.Collection(ctx, databaseID)
 	if err != nil {
 		return Summary{}, err
@@ -68,8 +71,6 @@ func (e Exporter) Export(ctx context.Context, databaseID string, format Format, 
 	writer := csv.NewWriter(w)
 	if format == FormatTSV {
 		writer.Comma = '\t'
-	} else if format != "" && format != FormatCSV {
-		return Summary{}, fmt.Errorf("unsupported format %q", format)
 	}
 	if err := writer.Write(headers); err != nil {
 		return Summary{}, err
@@ -98,6 +99,15 @@ func (e Exporter) Export(ctx context.Context, databaseID string, format Format, 
 		return Summary{}, err
 	}
 	return Summary{Database: collection.ID, Rows: len(pages), Columns: len(columns)}, nil
+}
+
+func ValidateFormat(format Format) error {
+	switch format {
+	case "", FormatCSV, FormatTSV:
+		return nil
+	default:
+		return fmt.Errorf("unsupported format %q", format)
+	}
 }
 
 func (e Exporter) referenceLabels(ctx context.Context) (ReferenceLabels, error) {

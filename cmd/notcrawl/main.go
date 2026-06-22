@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -644,6 +645,10 @@ func runExportDatabase(ctx context.Context, stdout io.Writer, cfg config.Config,
 	if *databaseID == "" {
 		return fmt.Errorf("export-db requires --database")
 	}
+	formatValue := tableexport.Format(*format)
+	if err := tableexport.ValidateFormat(formatValue); err != nil {
+		return err
+	}
 	st, err := store.Open(cfg.DBPath)
 	if err != nil {
 		return err
@@ -663,7 +668,7 @@ func runExportDatabase(ctx context.Context, stdout io.Writer, cfg config.Config,
 		defer file.Close()
 		out = file
 	}
-	s, err := tableexport.Exporter{Store: st}.Export(ctx, *databaseID, tableexport.Format(*format), out)
+	s, err := tableexport.Exporter{Store: st}.Export(ctx, *databaseID, formatValue, out)
 	if err != nil {
 		return err
 	}
@@ -698,7 +703,12 @@ func runExportAllDatabases(ctx context.Context, stdout io.Writer, cfg config.Con
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(index, "id\tname\tsource\trows\tcolumns\tfile")
+	indexWriter := csv.NewWriter(index)
+	indexWriter.Comma = '\t'
+	if err := indexWriter.Write([]string{"id", "name", "source", "rows", "columns", "file"}); err != nil {
+		_ = index.Close()
+		return err
+	}
 	exporter := tableexport.Exporter{Store: st}
 	used := map[string]bool{}
 	var databases, rows int
@@ -722,7 +732,15 @@ func runExportAllDatabases(ctx context.Context, stdout io.Writer, cfg config.Con
 		}
 		databases++
 		rows += s.Rows
-		fmt.Fprintf(index, "%s\t%s\t%s\t%d\t%d\t%s\n", collection.ID, collection.Name, collection.Source, s.Rows, s.Columns, name)
+		if err := indexWriter.Write([]string{collection.ID, collection.Name, collection.Source, fmt.Sprint(s.Rows), fmt.Sprint(s.Columns), name}); err != nil {
+			_ = index.Close()
+			return err
+		}
+	}
+	indexWriter.Flush()
+	if err := indexWriter.Error(); err != nil {
+		_ = index.Close()
+		return err
 	}
 	if err := index.Close(); err != nil {
 		return err

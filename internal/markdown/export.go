@@ -255,6 +255,7 @@ func (r pathResolver) resolveTeamID(table, id, collectionID string, seen map[str
 
 func writeFrontMatter(b *strings.Builder, page store.Page, spaceName, teamID, teamName string, coverage store.BlockCoverage) {
 	b.WriteString("---\n")
+	writeKV(b, "generated_by", "notcrawl")
 	writeKV(b, "id", page.ID)
 	writeKV(b, "space_id", page.SpaceID)
 	writeKV(b, "space", spaceName)
@@ -543,7 +544,7 @@ func pruneStaleMarkdown(root string, keep map[string]bool) error {
 			}
 			return nil
 		}
-		if filepath.Ext(path) == ".md" && !keep[path] {
+		if filepath.Ext(path) == ".md" && !keep[path] && isNotcrawlGeneratedMarkdown(path) {
 			return os.Remove(path)
 		}
 		return nil
@@ -559,6 +560,14 @@ func pruneStaleMarkdown(root string, keep map[string]bool) error {
 		}
 	}
 	return nil
+}
+
+func isNotcrawlGeneratedMarkdown(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(data), "\ngenerated_by: \"notcrawl\"\n")
 }
 
 func isIgnorableRemoveDirError(err error) bool {

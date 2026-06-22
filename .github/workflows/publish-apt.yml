@@ -16,9 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate Cloudsmith configuration
+        env:
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
         run: |
           set -euo pipefail
-          if [ -z "${{ secrets.CLOUDSMITH_API_KEY }}" ]; then
+          if [ -z "${CLOUDSMITH_API_KEY:-}" ]; then
             echo "Secret CLOUDSMITH_API_KEY is required."
             exit 1
           fi
@@ -40,7 +42,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --upgrade pip
-          python3 -m pip install cloudsmith-cli
+          python3 -m pip install cloudsmith-cli==1.11.1
 
       - name: Publish to Cloudsmith APT repository
         env:
