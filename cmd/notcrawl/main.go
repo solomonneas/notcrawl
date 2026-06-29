@@ -125,6 +125,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return runDatabases(ctx, stdout, cfg)
 	case "export-db":
 		return runExportDatabase(ctx, stdout, cfg, cmdArgs)
+	case "export":
+		return runExport(ctx, stdout, stderr, cfg, cmdArgs)
 	case "search":
 		return runSearch(ctx, stdout, cfg, cmdArgs)
 	case "tui":
